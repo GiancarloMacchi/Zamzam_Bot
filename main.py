@@ -1,99 +1,71 @@
 import os
 import logging
-import requests
-import telegram
-from amazon_paapi import AmazonApi
-from datetime import datetime
+from amazon_paapi_sdk import AmazonApi
+from amazon_paapi_sdk.models.search_items_request import SearchItemsRequest
+from amazon_paapi_sdk.models.search_items_resource import SearchItemsResource
 
-# Configura logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# Configurazione logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="***%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%y-%m-%d %H:%M:%S"
+)
 
-# Recupero variabili ambiente
+# Variabili ambiente
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
 KEYWORDS = os.getenv("KEYWORDS", "").split(",")
-MIN_SAVE = float(os.getenv("MIN_SAVE", 0))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
 
-# Inizializza bot Telegram
-bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
+# Risorse richieste (solo qui, per evitare doppioni)
+RESOURCES = [
+    SearchItemsResource.ITEMINFO_TITLE,
+    SearchItemsResource.OFFERS_LISTINGS_PRICE,
+    SearchItemsResource.OFFERS_LISTINGS_SAVINGBASIS,
+    SearchItemsResource.IMAGES_PRIMARY_LARGE
+]
 
-# Inizializza API Amazon con timeout
+# Inizializza API Amazon
 amazon = AmazonApi(
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    country=AMAZON_COUNTRY
+    access_key=AMAZON_ACCESS_KEY,
+    secret_key=AMAZON_SECRET_KEY,
+    partner_tag=AMAZON_ASSOCIATE_TAG,
+    host=f"webservices.amazon.{AMAZON_COUNTRY}",
+    region="eu-west-1"
 )
 
-def search_amazon_products(keyword):
-    """Cerca prodotti su Amazon usando la PA API"""
+failed_keywords = 0
+
+# Ciclo sulle keyword
+for keyword in KEYWORDS:
+    keyword = keyword.strip()
+    if not keyword:
+        continue
+
+    logging.info(f"🔍 Cerco: {keyword}")
+
     try:
-        return amazon.search_items(
-            keywords=keyword.strip(),
-            search_index="All",
-            item_count=10,
-            resources=[
-                "ItemInfo.Title",
-                "Offers.Listings.Price",
-                "Offers.Listings.SavingBasis",
-                "Images.Primary.Medium"
-            ],
-            timeout=10  # Timeout di sicurezza
+        request = SearchItemsRequest(
+            Keywords=keyword,
+            SearchIndex="All",
+            Resources=RESOURCES
         )
-    except Exception as e:
-        logging.error(f"Errore ricerca '{keyword}': {e}")
-        return None
 
-def post_to_telegram(product):
-    """Invia il prodotto su Telegram"""
-    try:
-        title = product.item_info.title.display_value
-        price = product.offers.listings[0].price.display_amount
-        url = product.detail_page_url
-        image_url = product.images.primary.medium.url
+        response = amazon.search_items(request)
 
-        message = f"📦 <b>{title}</b>\n💰 {price}\n🔗 <a href='{url}'>Acquista ora</a>"
-
-        bot.send_photo(
-            chat_id=TELEGRAM_CHAT_ID,
-            photo=image_url,
-            caption=message,
-            parse_mode=telegram.ParseMode.HTML
-        )
-    except Exception as e:
-        logging.error(f"Errore invio Telegram: {e}")
-
-def main():
-    failed_keywords = 0
-
-    for keyword in KEYWORDS:
-        if not keyword.strip():
-            continue
-
-        logging.info(f"🔍 Cerco: {keyword}")
-        products = search_amazon_products(keyword)
-
-        if not products:
+        if not response.search_result or not response.search_result.items:
+            logging.warning(f"❌ Nessun risultato per '{keyword}'")
             failed_keywords += 1
             continue
 
-        for product in products:
-            try:
-                price = product.offers.listings[0].price.amount
-                saving_basis = getattr(product.offers.listings[0], "saving_basis", None)
+        for item in response.search_result.items:
+            title = item.item_info.title.display_value if item.item_info and item.item_info.title else "Senza titolo"
+            logging.info(f"✅ {title}")
 
-                if saving_basis and saving_basis.amount > 0:
-                    save_percent = ((saving_basis.amount - price) / saving_basis.amount) * 100
-                    if save_percent >= MIN_SAVE:
-                        post_to_telegram(product)
-            except Exception as e:
-                logging.error(f"Errore analisi prodotto: {e}")
+    except Exception as e:
+        logging.error(f"Errore ricerca '{keyword}': {e}")
+        failed_keywords += 1
 
-    logging.info(f"🔴 Keyword fallite: {failed_keywords}")
-
-if __name__ == "__main__":
-    main()
+logging.info(f"📊 Keyword fallite: {failed_keywords}")
