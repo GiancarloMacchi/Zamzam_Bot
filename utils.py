@@ -11,12 +11,28 @@ amazon = AmazonApi(
 
 def search_amazon_products(keywords):
     try:
-        items = amazon.search_items(
+        result = amazon.search_items(
             keywords=keywords,
             search_index="All",
             item_count=int(os.getenv("ITEM_COUNT", 10))
         )
-        return items or []
+
+        # Restituiamo solo gli item
+        items = getattr(result, "items", [])
+
+        # Filtro lingua italiana se disponibile nei metadata
+        filtered_items = []
+        for item in items:
+            lang_info = (
+                item.get("ItemInfo", {})
+                    .get("Languages", {})
+                    .get("DisplayValues", [])
+            )
+            if not lang_info or any("Italian" in str(l) for l in lang_info):
+                filtered_items.append(item)
+
+        return filtered_items
+
     except Exception as e:
         print(f"Errore nella ricerca Amazon: {e}")
         return []
