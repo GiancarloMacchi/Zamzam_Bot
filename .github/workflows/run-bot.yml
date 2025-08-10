@@ -29,10 +29,5 @@ jobs:
         AMAZON_REGION: ${{ secrets.AMAZON_REGION }}
       run: python main.py
 
-on:
-  workflow_dispatch: # permette di farlo partire a mano
-  schedule:
-    - cron: "0 * * * *"
-
 
 "Aggiunto workflow run-bot"
