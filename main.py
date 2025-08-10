@@ -19,10 +19,16 @@ from amazon_paapi import AmazonApi  # la libreria installata dal repo git
 # --- CONFIG / ENV ---
 AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")  # CORRETTO: AMAZON_COUNTRY
-KEYWORDS = os.environ.get("KEYWORDS", "cuffie,smartwatch,aspirapolvere,auricolari").split(",")
-MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))  # filtro minimo sconto
+AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")  # il tuo secret si chiama così
+AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")
+
+# Categorie mirate alla vita genitoriale e bambini
+KEYWORDS = os.environ.get(
+    "KEYWORDS",
+    "pannolini,giochi bambini,libri per bambini,passeggino,seggiolino auto,abbigliamento premaman,biberon,fasciatoio,lettino neonato"
+).split(",")
+
+MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))
 ITEM_COUNT = int(os.environ.get("ITEM_COUNT", "8"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -38,7 +44,7 @@ log = logging.getLogger("post-deal")
 
 # --- Helper Telegram ---
 def send_telegram_message(text: str) -> Optional[dict]:
-    """Invia messaggio di testo su Telegram."""
+    """Invia messaggio di testo su Telegram. Ritorna JSON della risposta o None."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         log.warning("Telegram non configurato: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID mancanti.")
         return None
@@ -85,7 +91,7 @@ except Exception as e:
     sys.exit(1)
 
 def pick_deal():
-    """Cerca tra le keywords e ritorna l'offerta con il maggior saving sopra MIN_SAVE."""
+    """Cerca tra le keywords e ritorna l'offerta con il maggior saving trovato (se disponibile)."""
     best = None
     failed_keywords = 0
 
@@ -123,7 +129,6 @@ def pick_deal():
                         price = it.offers.listings[0].price.amount
                     except Exception:
                         price = None
-                # percentuale di risparmio
                 saving_pct = None
                 try:
                     saving_pct = getattr(it.offers.listings[0], "saving_percentage", None)
@@ -132,7 +137,7 @@ def pick_deal():
                 except Exception:
                     saving_pct = None
 
-                # FILTRO sconto minimo
+                # ✅ Filtra solo prodotti con sconto >= MIN_SAVE
                 if saving_pct is None or saving_pct < MIN_SAVE:
                     continue
 
@@ -164,7 +169,8 @@ def make_caption(item):
     if url:
         lines.append(f"\n🛒 Compra qui: {url}")
     lines.append("\n(Questo è un link affiliato — grazie se acquisti con il mio codice!)")
-    return "\n".join(lines)[:1000]
+    caption = "\n".join(lines)
+    return caption[:1000]
 
 def main():
     try:
@@ -181,7 +187,7 @@ def main():
             send_telegram_message(caption)
             return
 
-        log.info(f"Pubblico: {deal['title']} (risparmio: {deal.get('saving_pct')}%)")
+        log.info(f"Pubblico: {deal['title']} (risparmio: {deal.get('saving_pct')})")
         send_telegram_photo(deal["img"], caption)
         log.info("Fatto. Keyword fallite: %d", failed_keywords)
     except Exception as e:
