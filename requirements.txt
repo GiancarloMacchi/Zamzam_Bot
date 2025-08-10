@@ -1,5 +1,4 @@
-requests
-python-telegram-bot
-python-amazon-paapi
-python-dotenv
-bitlyshortener
+amazon-paapi==5.0.0
+bitlyshortener==0.6.4
+python-telegram-bot==13.15
+python-dotenv==1.0.0
