@@ -1,13 +1,17 @@
 import os
 import logging
+from datetime import datetime
 from utils import get_amazon_client, shorten_url, filter_products
 from telegram import Bot
+
+# Nome file log con data e ora
+log_filename = f"bot_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log"
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.FileHandler(log_filename, encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
