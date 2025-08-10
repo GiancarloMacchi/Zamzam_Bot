@@ -19,16 +19,17 @@ from amazon_paapi import AmazonApi  # la libreria installata dal repo git
 # --- CONFIG / ENV ---
 AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")  # il tuo secret si chiama così
+AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")
 
-# Categorie mirate alla vita genitoriale e bambini
+# Categorie più ampie ma sempre nel settore bambini/genitori
 KEYWORDS = os.environ.get(
     "KEYWORDS",
-    "pannolini,giochi bambini,libri per bambini,passeggino,seggiolino auto,abbigliamento premaman,biberon,fasciatoio,lettino neonato"
+    "bambini,neonati,giocattoli,giochi,abbigliamento bambini,abbigliamento neonato,abbigliamento premaman,mamme,prima infanzia"
 ).split(",")
 
-MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))
+# ✅ Soglia sconto minima 15%
+MIN_SAVE = int(os.environ.get("MIN_SAVE", "15"))
 ITEM_COUNT = int(os.environ.get("ITEM_COUNT", "8"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -44,7 +45,6 @@ log = logging.getLogger("post-deal")
 
 # --- Helper Telegram ---
 def send_telegram_message(text: str) -> Optional[dict]:
-    """Invia messaggio di testo su Telegram. Ritorna JSON della risposta o None."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         log.warning("Telegram non configurato: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID mancanti.")
         return None
@@ -59,7 +59,6 @@ def send_telegram_message(text: str) -> Optional[dict]:
         return None
 
 def send_telegram_photo(photo_url: str, caption: str) -> Optional[dict]:
-    """Invia foto via sendPhoto; fallback a sendMessage se fallisce."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         log.warning("Telegram non configurato: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID mancanti.")
         return None
@@ -75,7 +74,7 @@ def send_telegram_photo(photo_url: str, caption: str) -> Optional[dict]:
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        log.warning("Invio photo fallito, provo a inviare come messaggio. Errore: %s", e)
+        log.warning("Invio photo fallito, provo come messaggio. Errore: %s", e)
         return send_telegram_message(caption)
 
 # --- Validazione env ---
@@ -91,7 +90,6 @@ except Exception as e:
     sys.exit(1)
 
 def pick_deal():
-    """Cerca tra le keywords e ritorna l'offerta con il maggior saving trovato (se disponibile)."""
     best = None
     failed_keywords = 0
 
