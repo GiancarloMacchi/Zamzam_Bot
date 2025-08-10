@@ -1,61 +1,66 @@
-import os
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import logging
+name: Run Amazon Bot
 
-# --- Configurazione Logging ---
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+on:
+  workflow_dispatch:      # avvio manuale
+  schedule:
+    - cron: "0 * * * *"   # ogni ora
 
-# --- Lettura variabili da GitHub Secrets ---
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
-BITLY_TOKEN = os.getenv("BITLY_TOKEN")
-KEYWORDS = os.getenv("KEYWORDS")
-MIN_SAVE = os.getenv("MIN_SAVE")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
 
-# --- Controllo variabili mancanti ---
-missing = [
-    name for name, value in {
-        "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN,
-        "AMAZON_ACCESS_KEY": AMAZON_ACCESS_KEY,
-        "AMAZON_SECRET_KEY": AMAZON_SECRET_KEY,
-        "AMAZON_ASSOCIATE_TAG": AMAZON_ASSOCIATE_TAG,
-        "AMAZON_COUNTRY": AMAZON_COUNTRY,
-        "BITLY_TOKEN": BITLY_TOKEN,
-        "KEYWORDS": KEYWORDS,
-        "MIN_SAVE": MIN_SAVE,
-        "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID
-    }.items() if not value
-]
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
 
-if missing:
-    raise ValueError(f"⚠️ Manca una o più variabili d'ambiente nei Secrets: {', '.join(missing)}")
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-# --- Funzioni Bot ---
-def start(update, context):
-    update.message.reply_text("Ciao! Il bot è attivo ✅")
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
 
-def help_command(update, context):
-    update.message.reply_text("Comandi disponibili:\n/start - Avvia il bot\n/help - Mostra questo messaggio")
+      - name: 🔎 Debug env presence (no secret values are printed)
+        env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          required=(AMAZON_ACCESS_KEY AMAZON_SECRET_KEY AMAZON_ASSOCIATE_TAG AMAZON_COUNTRY BITLY_TOKEN KEYWORDS MIN_SAVE ITEM_COUNT TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID)
+          missing=()
+          for v in "${required[@]}"; do
+            if [ -z "${!v}" ]; then
+              missing+=("$v")
+            else
+              echo "$v ✅"
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing secrets: ${missing[*]}"
+            exit 1
+          else
+            echo "All required secrets present."
+          fi
 
-def echo(update, context):
-    update.message.reply_text(update.message.text)
-
-def main():
-    """Avvio del bot"""
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help_command))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, echo))
-
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+      - name: 🚀 Run bot (one-shot)
+        env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_ONCE: "true"   # IMPORTANT: in Actions vogliamo che termini dopo una chiamata
+        run: python main.py
