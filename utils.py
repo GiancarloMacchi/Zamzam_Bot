@@ -1,40 +1,42 @@
 import requests
 import logging
 
-def shorten_url(url, bitly_token):
-    """Accorcia un URL usando Bitly"""
-    if not bitly_token:
-        return url
+def shorten_url(long_url, bitly_token):
+    """Accorcia un URL usando l'API di Bitly."""
     try:
         headers = {"Authorization": f"Bearer {bitly_token}"}
-        json_data = {"long_url": url}
-        response = requests.post("https://api-ssl.bitly.com/v4/shorten", headers=headers, json=json_data)
-        if response.status_code == 200:
-            return response.json().get("link", url)
-        else:
-            logging.warning(f"Bitly errore {response.status_code}: {response.text}")
-            return url
+        data = {"long_url": long_url}
+        response = requests.post("https://api-ssl.bitly.com/v4/shorten", json=data, headers=headers)
+        response.raise_for_status()
+        return response.json().get("link")
     except Exception as e:
-        logging.error(f"Errore Bitly: {e}")
-        return url
+        logging.error(f"Errore nel creare il link Bitly: {e}")
+        return long_url  # In caso di errore restituisce il link originale
 
 
 def send_telegram_message(bot_token, chat_id, text, image_url=None):
-    """Invia un messaggio su Telegram, con o senza immagine"""
+    """Invia un messaggio su Telegram (con immagine opzionale)."""
     try:
         if image_url:
-            # Invia foto con didascalia
+            # Invia come foto con didascalia
             url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            payload = {"chat_id": chat_id, "caption": text, "parse_mode": "Markdown"}
-            files = {"photo": requests.get(image_url, stream=True).raw}
-            r = requests.post(url, data=payload, files={"photo": requests.get(image_url, stream=True).raw})
+            payload = {
+                "chat_id": chat_id,
+                "photo": image_url,
+                "caption": text,
+                "parse_mode": "Markdown"
+            }
         else:
             # Invia solo testo
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
-            r = requests.post(url, data=payload)
+            payload = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "Markdown"
+            }
 
-        if r.status_code != 200:
-            logging.error(f"Errore Telegram {r.status_code}: {r.text}")
+        response = requests.post(url, data=payload)
+        response.raise_for_status()
+        logging.info("✅ Messaggio inviato su Telegram")
     except Exception as e:
-        logging.error(f"Errore invio Telegram: {e}")
+        logging.error(f"Errore nell'invio del messaggio Telegram: {e}")
