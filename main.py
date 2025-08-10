@@ -1,49 +1,41 @@
 import os
 import logging
-import utils
+from utils import get_amazon_client, shorten_url, filter_products
+from telegram import Bot
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def main():
-    try:
-        amazon_access_key = os.getenv("AMAZON_ACCESS_KEY")
-        amazon_secret_key = os.getenv("AMAZON_SECRET_KEY")
-        amazon_associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
-        amazon_country = os.getenv("AMAZON_COUNTRY")
-        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    keywords = os.getenv("KEYWORDS", "infanzia,bambini,scuola").split(",")
 
-        if not all([amazon_access_key, amazon_secret_key, amazon_associate_tag, amazon_country, telegram_token, telegram_chat_id]):
-            logging.error("Uno o più secrets mancanti.")
-            return
+    amazon = get_amazon_client()
 
-        # Ricerca prodotti
-        prodotti = utils.cerca_prodotti(
-            amazon_access_key,
-            amazon_secret_key,
-            amazon_associate_tag,
-            amazon_country
-        )
+    for keyword in keywords:
+        try:
+            items = amazon.search_items(
+                keywords=keyword,
+                item_count=int(os.getenv("ITEM_COUNT", 10)),
+                resources=["Images.Primary.Large", "ItemInfo.Title", "Offers.Listings.Price", "Offers.Listings.SavingBasis.Price", "Offers.Listings.Savings"]
+            )
 
-        for prodotto in prodotti:
-            try:
-                if not utils.ha_offerte(prodotto):
-                    continue
-                if not utils.filtro_categoria(prodotto):
-                    continue
-                if not utils.filtro_sconto(prodotto, 20):
-                    continue
-                if not utils.filtro_lingua(prodotto, "it"):
+            filtered_items = filter_products(items)
+
+            for item in filtered_items:
+                try:
+                    title = item.item_info.title.display_value
+                    url = shorten_url(item.detail_page_url)
+                    discount = item.offers.listings[0].price.savings.percentage
+                    message = f"🎯 {title}\n💰 Sconto: {discount}%\n🔗 {url}"
+                    bot.send_message(chat_id=chat_id, text=message)
+                except Exception as e:
+                    logging.error(f"Errore nell'invio di un prodotto: {e}")
                     continue
 
-                messaggio = utils.formatta_messaggio(prodotto)
-                utils.invia_telegram(telegram_token, telegram_chat_id, messaggio)
-
-            except Exception as e:
-                logging.error(f"Errore con il prodotto {prodotto.get('ASIN', 'N/D')}: {e}")
-
-    except Exception as e:
-        logging.error(f"Errore generale: {e}")
+        except Exception as e:
+            logging.error(f"Errore nella ricerca con keyword '{keyword}': {e}")
+            continue
 
 if __name__ == "__main__":
     main()
