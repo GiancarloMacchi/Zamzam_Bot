@@ -3,7 +3,7 @@ name: run-bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"  # Esegue ogni 6 ore
+    - cron: "0 */6 * * *" # Ogni 6 ore
 
 jobs:
   run:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.x"
 
       - name: Install dependencies
         run: |
