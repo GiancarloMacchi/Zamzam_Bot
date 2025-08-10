@@ -3,7 +3,7 @@ name: Run Amazon Deals Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"  # Esegue ogni 6 ore
+    - cron: "0 */6 * * *" # ogni 6 ore
 
 jobs:
   run-bot:
@@ -16,12 +16,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests python-amazon-paapi
 
       - name: Run bot
         env:
@@ -29,11 +29,6 @@ jobs:
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-        run: |
-          python main.py
+        run: python main.py
