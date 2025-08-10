@@ -1,89 +1,59 @@
 import os
-import sys
 import logging
 from amazon_paapi import AmazonApi
-from utils import shorten_url, send_telegram_message
+from utils import send_telegram_message, get_discount_percentage
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+# Logging
+logging.basicConfig(level=logging.INFO)
 
-REQUIRED_ENV_VARS = [
-    "AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_ASSOCIATE_TAG",
-    "AMAZON_COUNTRY", "BITLY_TOKEN", "ITEM_COUNT", "KEYWORDS", "MIN_SAVE",
-    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"
-]
+# Credenziali Amazon API da secrets
+ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+COUNTRY = os.getenv("AMAZON_COUNTRY")
 
-# Controllo variabili mancanti
-missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
-if missing_vars:
-    logging.error(f"❌ Variabili mancanti: {', '.join(missing_vars)}")
-    sys.exit(1)
-
-# Config
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
-BITLY_TOKEN = os.getenv("BITLY_TOKEN")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-KEYWORDS = os.getenv("KEYWORDS")
-MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Telegram
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-CATEGORY_KEYWORDS = [
-    "bambino", "bambina", "neonato", "neonata", "infanzia",
-    "scuola", "giocattolo", "pannolino", "pappa", "maternità",
-    "genitore", "studente", "zaino", "cartoleria"
+# Categorie target
+CATEGORIES = [
+    "Baby",
+    "Toys",
+    "Kids",
+    "Children",
+    "School",
+    "Motherhood",
+    "Parenting"
 ]
 
-def product_matches_category(product_title, product_category):
-    text = f"{product_title} {product_category}".lower()
-    return any(keyword in text for keyword in CATEGORY_KEYWORDS)
+# Inizializza API
+amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
 
 def main():
-    logging.info("🔍 Avvio ricerca offerte Amazon...")
-
-    amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-
-    try:
-        results = amazon.search_items(
-            keywords=KEYWORDS,
-            item_count=ITEM_COUNT
-        )
-    except Exception as e:
-        logging.error(f"Errore ricerca Amazon: {e}")
-        sys.exit(1)
-
-    for item in results.items:
+    for category in CATEGORIES:
         try:
-            title = item.item_info.title.display_value if item.item_info and item.item_info.title else None
-            category = item.item_info.product_info.product_group.display_value if item.item_info and item.item_info.product_info and item.item_info.product_info.product_group else ""
-            offers = item.offers.listings if item.offers and item.offers.listings else None
+            logging.info(f"🔍 Cerco offerte nella categoria: {category}")
+            products = amazon.search_items(keywords=category, item_count=10)
+            
+            for product in products:
+                try:
+                    if not hasattr(product, "offers") or not product.offers:
+                        continue
 
-            if not title or not offers:
-                continue
+                    discount = get_discount_percentage(product)
+                    if discount is None or discount < 20:
+                        continue
 
-            offer = offers[0].price
-            if not offer or not offer.savings or not offer.savings.percentage:
-                continue
+                    message = f"🛍 *{product.title}*\n💰 Prezzo: {product.price}\n📉 Sconto: {discount}%\n🔗 [Vedi Offerta]({product.url})"
+                    send_telegram_message(message, TELEGRAM_CHAT_ID)
 
-            discount = offer.savings.percentage
-            if discount < MIN_SAVE:
-                continue
-
-            if not product_matches_category(title, category):
-                continue
-
-            price = offer.display_amount
-            url = item.detail_page_url
-            short_url = shorten_url(url, BITLY_TOKEN)
-            message = f"🎯 {title}\n💰 {price} (-{discount}%)\n🔗 {short_url}"
-
-            send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, message)
+                except Exception as e:
+                    logging.error(f"Errore elaborando un prodotto: {e}")
+                    continue  # Continua con il prossimo prodotto
 
         except Exception as e:
-            logging.error(f"Errore elaborazione prodotto: {e}")
-            continue
+            logging.error(f"Errore nella categoria {category}: {e}")
+            continue  # Continua con la prossima categoria
 
 if __name__ == "__main__":
     main()
