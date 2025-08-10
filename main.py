@@ -1,86 +1,55 @@
 import os
 import logging
-from amazon_api import get_amazon_products
-from utils import shorten_url, send_telegram_message
+from utils import search_products, send_telegram_message, shorten_url
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="***%(asctime)s*** - %(levelname)s - %(message)s")
 
-# Legge le variabili d'ambiente
-required_vars = [
-    "AMAZON_ACCESS_KEY",
-    "AMAZON_SECRET_KEY",
-    "AMAZON_ASSOCIATE_TAG",
-    "AMAZON_COUNTRY",
-    "BITLY_TOKEN",
-    "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_CHAT_ID",
-    "ITEM_COUNT",
-    "KEYWORDS",
-    "MIN_SAVE"
-]
+MIN_SAVE = int(os.getenv("MIN_SAVE", 20))  # Sconto minimo in %
+KEYWORDS = os.getenv("KEYWORDS", "infanzia,bambini,genitori,scuola").split(",")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
 
-missing_vars = [var for var in required_vars if not os.getenv(var)]
-if missing_vars:
-    logging.error(f"❌ Variabili mancanti: {', '.join(missing_vars)}")
-    exit(1)
+def category_matches(categories):
+    if not categories:
+        return False
+    categories_lower = [c.lower() for c in categories]
+    return any(keyword.strip().lower() in c for keyword in KEYWORDS for c in categories_lower)
 
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
-BITLY_TOKEN = os.getenv("BITLY_TOKEN")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT"))
-KEYWORDS = os.getenv("KEYWORDS")
-MIN_SAVE = int(os.getenv("MIN_SAVE"))
-
-try:
-    products = get_amazon_products(
-        KEYWORDS,
-        AMAZON_ACCESS_KEY,
-        AMAZON_SECRET_KEY,
-        AMAZON_ASSOCIATE_TAG
-    )
-except Exception as e:
-    logging.error(f"Errore durante la richiesta ad Amazon API: {e}")
-    exit(1)
-
-if not products:
-    logging.info("Nessun prodotto trovato.")
-    exit(0)
-
-for product in products:
+def main():
+    logging.info("🔍 Avvio ricerca prodotti Amazon...")
     try:
-        title = product.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
-        image_url = product.get("Images", {}).get("Primary", {}).get("Medium", {}).get("URL")
-        offers = product.get("Offers", {}).get("Listings", [])
-
-        if not offers:
-            logging.info(f"⏩ Nessuna offerta per '{title}', salto...")
-            continue
-
-        price_info = offers[0].get("Price", {})
-        amount = price_info.get("Amount")
-        currency = price_info.get("Currency")
-
-        saving_info = offers[0].get("SavingBasis", {})
-        saving_amount = saving_info.get("Amount", 0)
-        saving_percentage = 0
-        if amount and saving_amount:
-            saving_percentage = int((saving_amount - amount) / saving_amount * 100)
-
-        if saving_percentage < MIN_SAVE:
-            logging.info(f"⏩ Sconto {saving_percentage}% inferiore al minimo per '{title}', salto...")
-            continue
-
-        url = product.get("DetailPageURL")
-        short_url = shorten_url(url, BITLY_TOKEN)
-
-        message = f"🎯 *{title}*\n💰 Prezzo: {amount} {currency}\n📉 Sconto: {saving_percentage}%\n🔗 [Acquista qui]({short_url})"
-
-        send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, message, image_url)
-
+        products = search_products()
     except Exception as e:
-        logging.error(f"Errore nel processare un prodotto: {e}")
-        continue
+        logging.error(f"Errore nella ricerca prodotti: {e}")
+        return
+
+    for product in products:
+        try:
+            title = product.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
+            offers = product.get("Offers")
+            if not offers:
+                logging.info(f"↪️ Nessuna offerta per '{title}', salto...")
+                continue
+
+            saving_basis = offers.get("Listings", [])[0].get("Price", {}).get("Savings", {}).get("Percentage", 0)
+            if saving_basis < MIN_SAVE:
+                logging.info(f"↪️ Sconto {saving_basis}% inferiore al minimo per '{title}', salto...")
+                continue
+
+            categories = [b.get("DisplayName", "") for b in product.get("BrowseNodeInfo", {}).get("BrowseNodes", [])]
+            if not category_matches(categories):
+                logging.info(f"↪️ Categoria non rilevante per '{title}', salto...")
+                continue
+
+            url = product.get("DetailPageURL", "")
+            short_url = shorten_url(url)
+
+            message = f"🎯 *{title}*\n💰 Sconto: {saving_basis}%\n🔗 [Vedi su Amazon]({short_url})"
+            send_telegram_message(message)
+            logging.info(f"✅ Inviato: {title}")
+
+        except Exception as e:
+            logging.error(f"Errore con il prodotto '{title}': {e}")
+            continue
+
+if __name__ == "__main__":
+    main()
