@@ -3,8 +3,15 @@ import logging
 from amazon_paapi import AmazonApi
 import bitlyshortener
 
-# Configurazione logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# Configurazione logging su file + console
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("bot.log", encoding="utf-8"),  # log su file
+        logging.StreamHandler()  # log su console
+    ]
+)
 
 def get_amazon_client():
     return AmazonApi(
@@ -28,18 +35,22 @@ def filter_products(items, min_discount=20):
     for item in items:
         try:
             if not hasattr(item, "offers") or not item.offers:
+                logging.debug(f"Scartato (no offerte): {getattr(item, 'ASIN', 'N/A')}")
                 continue
             
             price_info = item.offers.listings[0].price
             if not price_info.savings:
+                logging.debug(f"Scartato (no sconto): {getattr(item, 'ASIN', 'N/A')}")
                 continue
             
             discount = int(price_info.savings.percentage)
             if discount < min_discount:
+                logging.debug(f"Scartato (sconto {discount}% < {min_discount}%): {getattr(item, 'ASIN', 'N/A')}")
                 continue
 
             category = (item.product_info.get("Category", "") or "").lower()
             if not any(keyword in category for keyword in ["infanzia", "bambini", "scuola", "genitori"]):
+                logging.debug(f"Scartato (categoria non valida): {getattr(item, 'ASIN', 'N/A')}")
                 continue
 
             filtered.append(item)
