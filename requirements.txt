@@ -1,2 +1,5 @@
-paapi5-python-sdk
 requests
+python-telegram-bot
+python-amazon-paapi
+python-dotenv
+bitlyshortener
