@@ -1,54 +1,85 @@
 import os
 import logging
-from utils import search_products, send_telegram_message, shorten_url
+from utils import search_products, send_telegram_message, get_discount_percentage
 
-logging.basicConfig(level=logging.INFO, format="***%(asctime)s*** - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="***%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%d-%m-%Y %H:%M:%S"
+)
 
-MIN_SAVE = int(os.getenv("MIN_SAVE", 20))  # Sconto minimo in %
-KEYWORDS = os.getenv("KEYWORDS", "infanzia,bambini,genitori,scuola").split(",")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+# Legge variabili ambiente
+MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
 
-def category_matches(categories):
+# Categorie consentite (parole chiave in lowercase)
+ALLOWED_CATEGORIES = [
+    "infanzia",
+    "bambini",
+    "genitori",
+    "scuola",
+    "neonati",
+    "maternità",
+    "puericultura",
+    "giocattoli educativi"
+]
+
+def is_category_allowed(categories):
+    """Controlla se almeno una categoria è ammessa"""
     if not categories:
         return False
     categories_lower = [c.lower() for c in categories]
-    return any(keyword.strip().lower() in c for keyword in KEYWORDS for c in categories_lower)
+    return any(allowed in c for c in categories_lower for allowed in ALLOWED_CATEGORIES)
 
 def main():
     logging.info("🔍 Avvio ricerca prodotti Amazon...")
+
     try:
         products = search_products()
     except Exception as e:
-        logging.error(f"Errore nella ricerca prodotti: {e}")
+        logging.error(f"Errore durante la ricerca prodotti: {e}")
+        return
+
+    if not products:
+        logging.info("Nessun prodotto trovato.")
         return
 
     for product in products:
         try:
             title = product.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
             offers = product.get("Offers")
+            categories = product.get("BrowseNodeInfo", {}).get("BrowseNodes", [])
+
+            # Estrai nomi categorie
+            category_names = []
+            for c in categories:
+                name = c.get("DisplayName")
+                if name:
+                    category_names.append(name)
+
+            # Filtra categorie
+            if not is_category_allowed(category_names):
+                logging.info(f"❌ Categoria non ammessa per '{title}', salto...")
+                continue
+
             if not offers:
-                logging.info(f"↪️ Nessuna offerta per '{title}', salto...")
+                logging.info(f"Nessuna offerta per '{title}', salto...")
                 continue
 
-            saving_basis = offers.get("Listings", [])[0].get("Price", {}).get("Savings", {}).get("Percentage", 0)
-            if saving_basis < MIN_SAVE:
-                logging.info(f"↪️ Sconto {saving_basis}% inferiore al minimo per '{title}', salto...")
+            # Calcola sconto
+            discount = get_discount_percentage(product)
+            if discount < MIN_SAVE:
+                logging.info(f"Sconto {discount}% inferiore al minimo per '{title}', salto...")
                 continue
 
-            categories = [b.get("DisplayName", "") for b in product.get("BrowseNodeInfo", {}).get("BrowseNodes", [])]
-            if not category_matches(categories):
-                logging.info(f"↪️ Categoria non rilevante per '{title}', salto...")
-                continue
+            # Prepara messaggio
+            url = product.get("DetailPageURL", "#")
+            message = f"🎯 *{title}*\n💰 Sconto: *{discount}%*\n🔗 [Acquista qui]({url})"
 
-            url = product.get("DetailPageURL", "")
-            short_url = shorten_url(url)
-
-            message = f"🎯 *{title}*\n💰 Sconto: {saving_basis}%\n🔗 [Vedi su Amazon]({short_url})"
+            # Invia messaggio singolo
             send_telegram_message(message)
-            logging.info(f"✅ Inviato: {title}")
 
         except Exception as e:
-            logging.error(f"Errore con il prodotto '{title}': {e}")
+            logging.error(f"Errore con prodotto '{product.get('ASIN', 'sconosciuto')}': {e}")
             continue
 
 if __name__ == "__main__":
