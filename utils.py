@@ -1,42 +1,85 @@
-import requests
+import os
 import logging
+import requests
+from urllib.parse import urlencode
 
-def shorten_url(long_url, bitly_token):
-    """Accorcia un URL usando l'API di Bitly."""
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+
+# ==========================
+# 🔍 Funzione ricerca Amazon
+# ==========================
+def search_products():
+    """
+    Effettua una ricerca prodotti usando l'API di Amazon PA-API.
+    """
+    from amazon.paapi import AmazonAPI  # Richiede libreria paapi5-python-sdk o simile
+    
+    amazon = AmazonAPI(
+        AMAZON_ACCESS_KEY,
+        AMAZON_SECRET_KEY,
+        AMAZON_ASSOCIATE_TAG,
+        AMAZON_COUNTRY
+    )
+
+    logging.info(f"🔎 Ricerca primi {ITEM_COUNT} prodotti da Amazon...")
+    products = amazon.search_items(
+        keywords="",
+        item_count=ITEM_COUNT,
+        resources=[
+            "ItemInfo.Title",
+            "Offers.Listings.Price",
+            "Offers.Listings.Price.Savings",
+            "BrowseNodeInfo.BrowseNodes",
+            "DetailPageURL"
+        ]
+    )
+    return products
+
+# ==========================
+# 🔗 Short URL con Bitly
+# ==========================
+def shorten_url(url):
+    if not BITLY_TOKEN:
+        return url
     try:
-        headers = {"Authorization": f"Bearer {bitly_token}"}
-        data = {"long_url": long_url}
-        response = requests.post("https://api-ssl.bitly.com/v4/shorten", json=data, headers=headers)
-        response.raise_for_status()
-        return response.json().get("link")
+        headers = {"Authorization": f"Bearer {BITLY_TOKEN}"}
+        data = {"long_url": url}
+        resp = requests.post("https://api-ssl.bitly.com/v4/shorten", json=data, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            return resp.json().get("link", url)
     except Exception as e:
-        logging.error(f"Errore nel creare il link Bitly: {e}")
-        return long_url  # In caso di errore restituisce il link originale
+        logging.error(f"Errore Bitly: {e}")
+    return url
 
+# ==========================
+# 📢 Invia messaggio Telegram
+# ==========================
+def send_telegram_message(text):
+    """
+    Invia un messaggio su Telegram (supporta Markdown).
+    """
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.error("Telegram BOT_TOKEN o CHAT_ID mancanti!")
+        return
 
-def send_telegram_message(bot_token, chat_id, text, image_url=None):
-    """Invia un messaggio su Telegram (con immagine opzionale)."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
     try:
-        if image_url:
-            # Invia come foto con didascalia
-            url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-            payload = {
-                "chat_id": chat_id,
-                "photo": image_url,
-                "caption": text,
-                "parse_mode": "Markdown"
-            }
-        else:
-            # Invia solo testo
-            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            payload = {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "Markdown"
-            }
-
-        response = requests.post(url, data=payload)
-        response.raise_for_status()
-        logging.info("✅ Messaggio inviato su Telegram")
+        resp = requests.post(url, data=payload, timeout=10)
+        if resp.status_code != 200:
+            logging.error(f"Errore invio Telegram: {resp.text}")
     except Exception as e:
-        logging.error(f"Errore nell'invio del messaggio Telegram: {e}")
+        logging.error(f"Errore connessione Telegram: {e}")
