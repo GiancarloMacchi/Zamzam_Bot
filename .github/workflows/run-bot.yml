@@ -1,0 +1,33 @@
+name: post-deal
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"  # ogni ora
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run bot
+      env:
+        AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+        AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+        AMAZON_PARTNER_TAG: ${{ secrets.AMAZON_PARTNER_TAG }}
+        AMAZON_REGION: ${{ secrets.AMAZON_REGION }}
+      run: python main.py
+
+
+"Aggiunto workflow run-bot"
