@@ -1,161 +1,110 @@
-#!/usr/bin/env python3
-# main.py - cerca offerte Amazon (PA-API) e le posta su Telegram con pulsante affiliato
-
-import os
-import sys
-import time
 import logging
-import requests
-from typing import Optional
-from urllib.parse import urlencode
+import os
+import random
+import telegram
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from amazon_paapi import AmazonApi
+from deep_translator import GoogleTranslator
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except:
-    pass
+# Configurazione logging
+logging.basicConfig(level=logging.INFO)
 
-# --- CONFIG ---
-AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")
-KEYWORDS = ["bambini", "giochi", "mamma", "neonato", "passeggino", "libri bambini", "gravidanza", "scuola"]
-MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))
-ITEM_COUNT = int(os.environ.get("ITEM_COUNT", "10"))
+# Credenziali Amazon PA-API
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_PARTNER_TAG = os.getenv("AMAZON_PARTNER_TAG")
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+# Token del bot Telegram e ID del canale
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
-BITLY_TOKEN = os.environ.get("BITLY_TOKEN")  # opzionale per shortlink professionali
+# Configurazione Amazon API
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, "IT")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="***%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger("post-deal")
+# Keywords per ricerca (ampliate)
+KEYWORDS = [
+    "mamma", "neonato", "passeggino", "libri bambini", "gravidanza", "scuola",
+    "giochi bambini", "seggiolino auto", "abbigliamento neonato", "latte in polvere",
+    "biberon", "fasciatoio", "pannolini", "culla", "lettino"
+]
 
-# --- Short link generator ---
-def shorten_url(url):
-    """Accorcia l'URL usando Bitly (se token presente) o TinyURL."""
+# Numero massimo di prodotti per keyword
+ITEM_COUNT = 20
+MIN_DISCOUNT = 20  # sconto minimo in percentuale
+
+# Bot Telegram
+bot = telegram.Bot(token=TELEGRAM_TOKEN)
+
+def get_discount_percentage(item):
     try:
-        if BITLY_TOKEN:
-            r = requests.post(
-                "https://api-ssl.bitly.com/v4/shorten",
-                headers={"Authorization": f"Bearer {BITLY_TOKEN}"},
-                json={"long_url": url},
-                timeout=10
-            )
-            if r.status_code == 200:
-                return r.json().get("link", url)
-        else:
-            r = requests.get(f"http://tinyurl.com/api-create.php?{urlencode({'url': url})}", timeout=10)
-            if r.status_code == 200:
-                return r.text.strip()
-    except Exception as e:
-        log.warning("Errore accorciamento link: %s", e)
+        list_price = float(item["Offers"]["Listings"][0]["Price"]["Savings"]["Percentage"])
+        return list_price
+    except:
+        return 0
+
+def generate_affiliate_link(url):
+    # L'API Amazon restituisce già link con partner tag, ma possiamo accorciarli con amzn.to se vogliamo
     return url
 
-# --- Telegram helpers ---
-def send_telegram_photo_with_button(photo_url: str, caption: str, button_url: str):
-    """Invia foto con pulsante inline su Telegram."""
-    api = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "photo": photo_url,
-        "caption": caption[:1000],
-        "parse_mode": "HTML",
-        "reply_markup": {
-            "inline_keyboard": [
-                [{"text": "🛒 Compra ora", "url": button_url}]
-            ]
-        }
-    }
-    try:
-        r = requests.post(api, json=payload, timeout=20)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        log.exception("Errore invio messaggio con pulsante:")
-        return None
-
-# --- Amazon API ---
-if not all([AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG]):
-    raise ValueError("⚠️ Manca una o più variabili AMAZON_* nei Secrets!")
-
-try:
-    amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-except Exception as e:
-    log.exception("Errore inizializzazione AmazonApi:")
-    sys.exit(1)
-
-# --- Deal Picker ---
-def pick_deal():
-    """Trova l'offerta con sconto >= MIN_SAVE nelle categorie selezionate."""
-    best = None
-    for kw in KEYWORDS:
-        kw = kw.strip()
-        if not kw:
-            continue
-        log.info("🔎 Cerco: %s", kw)
-        try:
-            res = amazon.search_items(keywords=kw, item_count=ITEM_COUNT)
-        except Exception as e:
-            log.warning("❌ Errore ricerca '%s': %s", kw, e)
-            time.sleep(1)
-            continue
-
-        items = getattr(res, "items", []) or []
-        for it in items:
-            try:
-                saving_pct = getattr(it.offers.listings[0], "saving_percentage", None) or 0
-                if saving_pct < MIN_SAVE:
-                    continue
-                title = getattr(it.item_info.title, "display_value", "Prodotto Amazon")
-                img = getattr(it.images.primary.large, "url", None)
-                url = getattr(it, "detail_page_url", None)
-                price = getattr(it.offers.listings[0].price, "display_amount", None)
-                if best is None or saving_pct > best["saving_pct"]:
-                    best = {
-                        "title": title,
-                        "img": img,
-                        "url": url,
-                        "price": price,
-                        "saving_pct": saving_pct
-                    }
-            except:
-                continue
-    return best
-
-# --- Caption generator ---
-def generate_caption(item):
-    """Genera testo descrittivo personalizzato per l'offerta."""
-    title = item["title"]
-    price = item["price"] or ""
-    saving = item["saving_pct"]
-    # frase personalizzata
-    custom_line = f"Ideale per la tua famiglia! Approfitta subito di questo sconto del {saving}%."
-    lines = [
-        f"🔥 <b>{title}</b>",
-        f"Prezzo: {price}",
-        custom_line
+def create_custom_message(title):
+    templates = [
+        f"\"Perfetto per i più piccoli: {title}! Un'occasione da non perdere 😍\"",
+        f"\"Con {title} la vita diventa più semplice! Approfitta dello sconto 🤩\"",
+        f"\"Il nostro piccolo ha adorato {title}, e il tuo? 🍼💖\"",
+        f"\"Un regalo ideale: {title}. Non lasciartelo scappare 🎁\""
     ]
-    return "\n".join(lines)
+    return random.choice(templates)
 
-# --- Main ---
-def main():
-    deal = pick_deal()
-    if not deal:
-        log.info("Nessuna offerta trovata.")
-        return
+def search_and_post():
+    for keyword in KEYWORDS:
+        logging.info(f"🔍 Cerco: {keyword}")
+        try:
+            results = amazon.search_items(
+                keywords=keyword,
+                item_count=ITEM_COUNT,
+                resources=[
+                    "Images.Primary.Medium",
+                    "ItemInfo.Title",
+                    "Offers.Listings.Price",
+                    "Offers.Listings.SavingBasis",
+                    "Offers.Listings.Price.Savings"
+                ]
+            )
 
-    caption = generate_caption(deal)
-    affiliate_url = f"{deal['url']}&tag={AMAZON_ASSOCIATE_TAG}"
-    short_url = shorten_url(affiliate_url)
-    send_telegram_photo_with_button(deal["img"], caption, short_url)
-    log.info("✅ Offerta pubblicata: %s", deal["title"])
+            offers_found = False
+
+            for item in results["SearchResult"]["Items"]:
+                discount = get_discount_percentage(item)
+                if discount >= MIN_DISCOUNT:
+                    offers_found = True
+
+                    title = item["ItemInfo"]["Title"]["DisplayValue"]
+                    url = item["Offers"]["Listings"][0]["MerchantInfo"]["MerchantName"]
+                    image_url = item["Images"]["Primary"]["Medium"]["URL"]
+                    price = item["Offers"]["Listings"][0]["Price"]["DisplayAmount"]
+                    affiliate_link = generate_affiliate_link(item["DetailPageURL"])
+
+                    custom_message = create_custom_message(title)
+
+                    # Pulsante con link affiliato
+                    button = [[InlineKeyboardButton("🛒 Acquista ora", url=affiliate_link)]]
+                    reply_markup = InlineKeyboardMarkup(button)
+
+                    message_text = f"**{title}** - SCONTO {discount}%\n\n💰 {price}\n\n{custom_message}"
+
+                    bot.send_photo(
+                        chat_id=TELEGRAM_CHANNEL_ID,
+                        photo=image_url,
+                        caption=message_text,
+                        parse_mode="Markdown",
+                        reply_markup=reply_markup
+                    )
+
+            if not offers_found:
+                logging.info(f"Nessuna offerta trovata per '{keyword}'.")
+
+        except Exception as e:
+            logging.error(f"Errore durante la ricerca per '{keyword}': {e}")
 
 if __name__ == "__main__":
-    main()
+    search_and_post()
