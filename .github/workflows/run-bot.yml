@@ -26,7 +26,7 @@ jobs:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
-          AMAZON_REGION: ${{ secrets.AMAZON_REGION }}
+          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
