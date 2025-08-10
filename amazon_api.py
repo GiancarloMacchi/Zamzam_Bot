@@ -1,84 +1,76 @@
+# amazon_api.py
 import requests
 import datetime
 import hashlib
 import hmac
-import base64
-from urllib.parse import quote
+import json
 
-def sign(key, msg):
-    return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
-
-def get_signature_key(key, date_stamp, region_name, service_name):
-    k_date = sign(('AWS4' + key).encode('utf-8'), date_stamp)
-    k_region = sign(k_date, region_name)
-    k_service = sign(k_region, service_name)
-    k_signing = sign(k_service, 'aws4_request')
-    return k_signing
-
-def get_amazon_products(keyword, amazon_access_key, amazon_secret_key, amazon_partner_tag, region="us-east-1", marketplace="www.amazon.com"):
+def get_amazon_products(
+    keywords,
+    amazon_access_key,
+    amazon_secret_key,
+    amazon_tag,
+    region="eu-west-1",
+    host="webservices.amazon.it"
+):
     """
-    Cerca prodotti su Amazon usando PA-API 5.0
+    Recupera prodotti da Amazon PA API 5.0
     """
-    # Endpoint
-    endpoint = f"https://webservices.amazon.com/paapi5/searchitems"
-    host = "webservices.amazon.com"
-    service = "ProductAdvertisingAPI"
-    content_type = "application/json; charset=UTF-8"
-
-    # Data
-    now = datetime.datetime.utcnow()
-    amz_date = now.strftime('%Y%m%dT%H%M%SZ')
-    date_stamp = now.strftime('%Y%m%d')
-
-    # Corpo della richiesta
+    endpoint = f"https://{host}/paapi5/searchitems"
     payload = {
-        "Keywords": keyword,
-        "SearchIndex": "All",
-        "PartnerTag": amazon_partner_tag,
+        "Keywords": keywords,
+        "PartnerTag": amazon_tag,
         "PartnerType": "Associates",
+        "Marketplace": "www.amazon.it",
         "Resources": [
+            "Images.Primary.Medium",
             "ItemInfo.Title",
             "Offers.Listings.Price"
         ]
     }
 
-    import json
-    request_payload = json.dumps(payload)
+    # Timestamp e firma richiesta
+    t = datetime.datetime.utcnow()
+    amz_date = t.strftime("%Y%m%dT%H%M%SZ")
+    date_stamp = t.strftime("%Y%m%d")
 
-    # Step 1: Creazione della richiesta canonica
     canonical_uri = "/paapi5/searchitems"
     canonical_querystring = ""
-    canonical_headers = f"content-type:{content_type}\nhost:{host}\nx-amz-date:{amz_date}\n"
-    signed_headers = "content-type;host;x-amz-date"
-    payload_hash = hashlib.sha256(request_payload.encode('utf-8')).hexdigest()
-    canonical_request = f"POST\n{canonical_uri}\n{canonical_querystring}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+    canonical_headers = f"content-encoding:amz-1.0\nhost:{host}\nx-amz-date:{amz_date}\n"
+    signed_headers = "content-encoding;host;x-amz-date"
+    payload_json = json.dumps(payload)
 
-    # Step 2: Creazione della stringa da firmare
+    canonical_request = f"POST\n{canonical_uri}\n{canonical_querystring}\n{canonical_headers}\n{signed_headers}\n{hashlib.sha256(payload_json.encode('utf-8')).hexdigest()}"
     algorithm = "AWS4-HMAC-SHA256"
-    credential_scope = f"{date_stamp}/{region}/{service}/aws4_request"
-    string_to_sign = f"{algorithm}\n{amz_date}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()}"
+    credential_scope = f"{date_stamp}/{region}/ProductAdvertisingAPI/aws4_request"
 
-    # Step 3: Firma
-    signing_key = get_signature_key(amazon_secret_key, date_stamp, region, service)
+    def sign(key, msg):
+        return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+
+    def getSignatureKey(key, dateStamp, regionName, serviceName):
+        kDate = sign(('AWS4' + key).encode('utf-8'), dateStamp)
+        kRegion = sign(kDate, regionName)
+        kService = sign(kRegion, serviceName)
+        kSigning = sign(kService, 'aws4_request')
+        return kSigning
+
+    signing_key = getSignatureKey(amazon_secret_key, date_stamp, region, "ProductAdvertisingAPI")
+    string_to_sign = f"{algorithm}\n{amz_date}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()}"
     signature = hmac.new(signing_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
 
-    # Step 4: Autorizzazione
-    authorization_header = (
-        f"{algorithm} Credential={amazon_access_key}/{credential_scope}, "
-        f"SignedHeaders={signed_headers}, Signature={signature}"
-    )
-
-    # Step 5: Headers finali
     headers = {
-        "Content-Type": content_type,
+        "Content-Encoding": "amz-1.0",
+        "Content-Type": "application/json; charset=utf-8",
+        "Host": host,
         "X-Amz-Date": amz_date,
-        "Authorization": authorization_header
+        "X-Amz-Target": "com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems",
+        "Authorization": f"{algorithm} Credential={amazon_access_key}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
     }
 
-    # Richiesta
-    response = requests.post(endpoint, headers=headers, data=request_payload)
+    response = requests.post(endpoint, headers=headers, data=payload_json)
 
     if response.status_code != 200:
-        raise Exception(f"Amazon API error: {response.status_code} - {response.text}")
+        raise Exception(f"Amazon API error: {response.status_code}, {response.text}")
 
-    return response.json()
+    data = response.json()
+    return data.get("SearchResult", {}).get("Items", [])
