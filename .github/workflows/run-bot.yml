@@ -1,38 +1,36 @@
-name: run-bot
+name: Run Amazon Bot
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Avvio manuale da GitHub
   schedule:
-    - cron: "0 */6 * * *" # Ogni 6 ore
+    - cron: "0 * * * *" # Ogni ora
 
 jobs:
-  run:
+  run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
+          python-version: '3.10'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
 
-      - name: Run bot
+      - name: 🚀 Run bot
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
-          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          AMAZON_REGION: ${{ secrets.AMAZON_REGION }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
         run: python main.py
