@@ -1,60 +1,46 @@
 import os
 import logging
-from utils import search_amazon_products, send_telegram_message
+import utils
 
 logging.basicConfig(level=logging.INFO)
 
-MIN_DISCOUNT = int(os.getenv("MIN_SAVE", 20))
-
 def main():
     try:
-        logging.info("Avvio ricerca prodotti Amazon...")
+        amazon_access_key = os.getenv("AMAZON_ACCESS_KEY")
+        amazon_secret_key = os.getenv("AMAZON_SECRET_KEY")
+        amazon_associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
+        amazon_country = os.getenv("AMAZON_COUNTRY")
+        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
-        products = search_amazon_products()
-        logging.info(f"Trovati {len(products)} prodotti totali.")
+        if not all([amazon_access_key, amazon_secret_key, amazon_associate_tag, amazon_country, telegram_token, telegram_chat_id]):
+            logging.error("Uno o più secrets mancanti.")
+            return
 
-        sent_count = 0
-        for product in products:
+        # Ricerca prodotti
+        prodotti = utils.cerca_prodotti(
+            amazon_access_key,
+            amazon_secret_key,
+            amazon_associate_tag,
+            amazon_country
+        )
+
+        for prodotto in prodotti:
             try:
-                # Salta se non ha offerte
-                if "Offers" not in product or not product["Offers"]:
+                if not utils.ha_offerte(prodotto):
+                    continue
+                if not utils.filtro_categoria(prodotto):
+                    continue
+                if not utils.filtro_sconto(prodotto, 20):
+                    continue
+                if not utils.filtro_lingua(prodotto, "it"):
                     continue
 
-                offer = product["Offers"][0]
-                price = float(offer.get("Price", 0))
-                list_price = float(offer.get("ListPrice", 0))
-
-                if list_price <= 0:
-                    continue
-
-                discount_percentage = int(((list_price - price) / list_price) * 100)
-
-                # Filtri: sconto minimo e categorie infanzia/scuola
-                categories = [c.lower() for c in product.get("Categories", [])]
-                infanzia_keywords = ["bambini", "neonati", "infanzia", "scuola", "maternità", "giocattoli"]
-                if discount_percentage < MIN_DISCOUNT or not any(k in " ".join(categories) for k in infanzia_keywords):
-                    continue
-
-                # Filtro lingua italiana
-                title = product.get("Title", "").lower()
-                if not any(parola in title for parola in ["il", "la", "un", "una", "per", "con", "bambino", "bambina"]):
-                    continue
-
-                # Prepara messaggio
-                message = f"📦 {product.get('Title', 'Senza titolo')}\n"
-                message += f"💰 Prezzo: {price}€\n"
-                message += f"🔻 Sconto: {discount_percentage}%\n"
-                message += f"🔗 {product.get('ShortUrl', product.get('Url', ''))}"
-
-                send_telegram_message(message, image_url=product.get("Image"))
-
-                sent_count += 1
+                messaggio = utils.formatta_messaggio(prodotto)
+                utils.invia_telegram(telegram_token, telegram_chat_id, messaggio)
 
             except Exception as e:
-                logging.error(f"Errore su un prodotto: {e}")
-                continue
-
-        logging.info(f"Invio completato: {sent_count} prodotti inviati.")
+                logging.error(f"Errore con il prodotto {prodotto.get('ASIN', 'N/D')}: {e}")
 
     except Exception as e:
         logging.error(f"Errore generale: {e}")
