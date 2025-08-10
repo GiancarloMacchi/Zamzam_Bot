@@ -6,7 +6,7 @@ from telegram import Bot
 access_key = os.environ.get("AMAZON_ACCESS_KEY")
 secret_key = os.environ.get("AMAZON_SECRET_KEY")
 partner_tag = os.environ.get("AMAZON_ASSOCIATE_TAG")
-region = os.environ.get("AMAZON_REGION", "IT")
+region = os.environ.get("AMAZON_COUNTRY", "it")
 telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
 telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
