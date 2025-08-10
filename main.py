@@ -4,7 +4,7 @@ import os
 import sys
 import time
 import logging
-from typing import Optional
+from typing import Optional, List
 
 # opzionale per sviluppo locale (.env)
 try:
@@ -14,7 +14,7 @@ except Exception:
     pass
 
 import requests
-from amazon_paapi import AmazonApi  # la libreria installata dal repo git
+from amazon_paapi import AmazonApi  # wrapper usato nel progetto
 
 # --- CONFIG / ENV ---
 AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
@@ -22,14 +22,14 @@ AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")
 
-# Categorie più ampie ma sempre nel settore bambini/genitori
+# keywords più generiche nella nicchia genitori/bambini
 KEYWORDS = os.environ.get(
     "KEYWORDS",
-    "bambini,neonati,giocattoli,giochi,abbigliamento bambini,abbigliamento neonato,abbigliamento premaman,mamme,prima infanzia"
+    "bambini,neonati,giocattoli,giochi,abbigliamento bambini,abbigliamento neonato,abbigliamento premaman,mamme,prima infanzia,libri bambini"
 ).split(",")
 
-# ✅ Soglia sconto minima 15%
-MIN_SAVE = int(os.environ.get("MIN_SAVE", "15"))
+# MIN_SAVE richiesto (ora 20%)
+MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))
 ITEM_COUNT = int(os.environ.get("ITEM_COUNT", "8"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -89,7 +89,68 @@ except Exception as e:
     send_telegram_message(f"Errore init AmazonApi: {e}")
     sys.exit(1)
 
+def extract_asin_from_search_item(it) -> Optional[str]:
+    # proviamo alcuni attributi possibili
+    for attr in ("asin", "asin_value", "ASIN", "asin"):
+        v = getattr(it, attr, None)
+        if v:
+            return v
+    # fallback: alcuni wrapper espongono item.asin.value
+    try:
+        v = getattr(getattr(it, "asin", None), "value", None)
+        if v:
+            return v
+    except Exception:
+        pass
+    return None
+
+def fetch_details_for_asins(asins: List[str]):
+    """Chiama get_items per una lista di ASIN e ritorna la risposta (o None)."""
+    if not asins:
+        return None
+    resources = [
+        "Images.Primary.Large",
+        "ItemInfo.Title",
+        "Offers.Listings.Price",
+        "Offers.Listings.SavingAmount",
+        "Offers.Listings.SavingPercentage",
+    ]
+    try:
+        # alcuni wrapper aspettano item_ids / item_id_list, proviamo la forma più comune
+        details = amazon.get_items(item_ids=asins, resources=resources)
+        return details
+    except TypeError as e:
+        log.warning("get_items TypeError con resources, riprovo senza resources: %s", e)
+        try:
+            details = amazon.get_items(item_ids=asins)
+            return details
+        except Exception as e2:
+            log.warning("get_items fallback fallito: %s", e2)
+            return None
+    except Exception as e:
+        log.warning("Errore get_items: %s", e)
+        return None
+
+def parse_saving_from_detail(d) -> Optional[float]:
+    """Estrae la percentuale di saving da un item detail (se disponibile)."""
+    try:
+        # proviamo listing.saving_percentage
+        sp = getattr(d.offers.listings[0], "saving_percentage", None)
+        if sp is not None:
+            return float(sp)
+    except Exception:
+        pass
+    try:
+        sp = getattr(getattr(d.offers.listings[0], "price", None), "savings_percentage", None)
+        if sp is not None:
+            return float(sp)
+    except Exception:
+        pass
+    # in alcuni casi saving_amount + price => possiamo provare a calcolare, ma saltiamo per ora
+    return None
+
 def pick_deal():
+    """Cerca tra le keywords e ritorna l'offerta con il maggior saving trovato (se disponibile)."""
     best = None
     failed_keywords = 0
 
@@ -107,35 +168,56 @@ def pick_deal():
             continue
 
         items = getattr(res, "items", []) or []
+        # raccogliamo ASIN trovati
+        asins = []
         for it in items:
+            asin = extract_asin_from_search_item(it)
+            if asin:
+                asins.append(asin)
+        if not asins:
+            # niente ASIN => saltiamo
+            continue
+
+        # prendiamo i dettagli (offers) per quegli ASIN
+        details = fetch_details_for_asins(asins)
+        detail_items = getattr(details, "items", []) or [] if details else []
+
+        # se abbiamo dettagli, usiamoli
+        for d in detail_items:
             try:
-                title = getattr(it.item_info.title, "display_value", None) or "Prodotto Amazon"
+                # titolo
+                title = getattr(getattr(d, "item_info", None), "title", None)
+                if title:
+                    title = getattr(title, "display_value", None) or str(title)
+                else:
+                    title = getattr(d, "title", None) or "Prodotto Amazon"
+
+                # immagine
                 img = None
                 try:
-                    img = getattr(it.images.primary.large, "url", None)
+                    img = getattr(d.images.primary.large, "url", None)
                 except Exception:
                     try:
-                        img = getattr(it.images.primary, "url", None)
+                        img = getattr(d.images.primary, "url", None)
                     except Exception:
                         img = None
-                url = getattr(it, "detail_page_url", None)
+
+                url = getattr(d, "detail_page_url", None) or f"https://www.amazon.{AMAZON_COUNTRY.lower()}/dp/{getattr(d, 'asin', '')}"
+
+                # prezzo
                 price = None
                 try:
-                    price = it.offers.listings[0].price.display_amount
+                    price = d.offers.listings[0].price.display_amount
                 except Exception:
                     try:
-                        price = it.offers.listings[0].price.amount
+                        price = d.offers.listings[0].price.amount
                     except Exception:
                         price = None
-                saving_pct = None
-                try:
-                    saving_pct = getattr(it.offers.listings[0], "saving_percentage", None)
-                    if saving_pct is None:
-                        saving_pct = getattr(it.offers.listings[0].price, "savings_percentage", None)
-                except Exception:
-                    saving_pct = None
 
-                # ✅ Filtra solo prodotti con sconto >= MIN_SAVE
+                # percentuale di risparmio
+                saving_pct = parse_saving_from_detail(d)
+
+                # filtriamo per soglia minima
                 if saving_pct is None or saving_pct < MIN_SAVE:
                     continue
 
@@ -147,10 +229,60 @@ def pick_deal():
                         "url": url,
                         "price": price,
                         "saving_pct": score,
-                        "keyword": kw
+                        "keyword": kw,
+                        "asin": getattr(d, "asin", None),
                     }
-            except Exception:
+            except Exception as e:
+                log.debug("Ignoro dettaglio item per errore parsing: %s", e)
                 continue
+
+        # fallback: talvolta saving info è presente direttamente nell'oggetto di search
+        if not best:
+            for it in items:
+                try:
+                    # prova a leggere saving dalla search-item (se esiste)
+                    saving_pct = None
+                    try:
+                        saving_pct = getattr(it.offers.listings[0], "saving_percentage", None)
+                        if saving_pct is None:
+                            saving_pct = getattr(getattr(it.offers.listings[0], "price", None), "savings_percentage", None)
+                    except Exception:
+                        saving_pct = None
+
+                    if saving_pct is None or saving_pct < MIN_SAVE:
+                        continue
+
+                    title = getattr(it.item_info.title, "display_value", None) or "Prodotto Amazon"
+                    img = None
+                    try:
+                        img = getattr(it.images.primary.large, "url", None)
+                    except Exception:
+                        try:
+                            img = getattr(it.images.primary, "url", None)
+                        except Exception:
+                            img = None
+                    url = getattr(it, "detail_page_url", None)
+                    price = None
+                    try:
+                        price = it.offers.listings[0].price.display_amount
+                    except Exception:
+                        try:
+                            price = it.offers.listings[0].price.amount
+                        except Exception:
+                            price = None
+
+                    score = saving_pct
+                    if best is None or (score and score > (best.get("saving_pct") or 0)):
+                        best = {
+                            "title": title,
+                            "img": img,
+                            "url": url,
+                            "price": price,
+                            "saving_pct": score,
+                            "keyword": kw
+                        }
+                except Exception:
+                    continue
 
     return best, failed_keywords
 
