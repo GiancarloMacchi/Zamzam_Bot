@@ -1,85 +1,88 @@
 import os
+import sys
 import logging
-from utils import search_products, send_telegram_message, get_discount_percentage
+from amazon_paapi import AmazonApi
+from utils import shorten_url, send_telegram_message
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="***%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%d-%m-%Y %H:%M:%S"
-)
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 
-# Legge variabili ambiente
-MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
-
-# Categorie consentite (parole chiave in lowercase)
-ALLOWED_CATEGORIES = [
-    "infanzia",
-    "bambini",
-    "genitori",
-    "scuola",
-    "neonati",
-    "maternità",
-    "puericultura",
-    "giocattoli educativi"
+REQUIRED_ENV_VARS = [
+    "AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_ASSOCIATE_TAG",
+    "AMAZON_COUNTRY", "BITLY_TOKEN", "ITEM_COUNT", "KEYWORDS", "MIN_SAVE",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"
 ]
 
-def is_category_allowed(categories):
-    """Controlla se almeno una categoria è ammessa"""
-    if not categories:
-        return False
-    categories_lower = [c.lower() for c in categories]
-    return any(allowed in c for c in categories_lower for allowed in ALLOWED_CATEGORIES)
+# Controllo variabili mancanti
+missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+if missing_vars:
+    logging.error(f"❌ Variabili mancanti: {', '.join(missing_vars)}")
+    sys.exit(1)
+
+# Config
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+KEYWORDS = os.getenv("KEYWORDS")
+MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+CATEGORY_KEYWORDS = [
+    "bambino", "bambina", "neonato", "neonata", "infanzia",
+    "scuola", "giocattolo", "pannolino", "pappa", "maternità",
+    "genitore", "studente", "zaino", "cartoleria"
+]
+
+def product_matches_category(product_title, product_category):
+    text = f"{product_title} {product_category}".lower()
+    return any(keyword in text for keyword in CATEGORY_KEYWORDS)
 
 def main():
-    logging.info("🔍 Avvio ricerca prodotti Amazon...")
+    logging.info("🔍 Avvio ricerca offerte Amazon...")
+
+    amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
 
     try:
-        products = search_products()
+        results = amazon.search_items(
+            keywords=KEYWORDS,
+            item_count=ITEM_COUNT
+        )
     except Exception as e:
-        logging.error(f"Errore durante la ricerca prodotti: {e}")
-        return
+        logging.error(f"Errore ricerca Amazon: {e}")
+        sys.exit(1)
 
-    if not products:
-        logging.info("Nessun prodotto trovato.")
-        return
-
-    for product in products:
+    for item in results.items:
         try:
-            title = product.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
-            offers = product.get("Offers")
-            categories = product.get("BrowseNodeInfo", {}).get("BrowseNodes", [])
+            title = item.item_info.title.display_value if item.item_info and item.item_info.title else None
+            category = item.item_info.product_info.product_group.display_value if item.item_info and item.item_info.product_info and item.item_info.product_info.product_group else ""
+            offers = item.offers.listings if item.offers and item.offers.listings else None
 
-            # Estrai nomi categorie
-            category_names = []
-            for c in categories:
-                name = c.get("DisplayName")
-                if name:
-                    category_names.append(name)
-
-            # Filtra categorie
-            if not is_category_allowed(category_names):
-                logging.info(f"❌ Categoria non ammessa per '{title}', salto...")
+            if not title or not offers:
                 continue
 
-            if not offers:
-                logging.info(f"Nessuna offerta per '{title}', salto...")
+            offer = offers[0].price
+            if not offer or not offer.savings or not offer.savings.percentage:
                 continue
 
-            # Calcola sconto
-            discount = get_discount_percentage(product)
+            discount = offer.savings.percentage
             if discount < MIN_SAVE:
-                logging.info(f"Sconto {discount}% inferiore al minimo per '{title}', salto...")
                 continue
 
-            # Prepara messaggio
-            url = product.get("DetailPageURL", "#")
-            message = f"🎯 *{title}*\n💰 Sconto: *{discount}%*\n🔗 [Acquista qui]({url})"
+            if not product_matches_category(title, category):
+                continue
 
-            # Invia messaggio singolo
-            send_telegram_message(message)
+            price = offer.display_amount
+            url = item.detail_page_url
+            short_url = shorten_url(url, BITLY_TOKEN)
+            message = f"🎯 {title}\n💰 {price} (-{discount}%)\n🔗 {short_url}"
+
+            send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, message)
 
         except Exception as e:
-            logging.error(f"Errore con prodotto '{product.get('ASIN', 'sconosciuto')}': {e}")
+            logging.error(f"Errore elaborazione prodotto: {e}")
             continue
 
 if __name__ == "__main__":
