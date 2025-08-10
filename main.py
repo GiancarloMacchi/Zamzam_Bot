@@ -1,56 +1,58 @@
+# main.py
 import os
-import sys
 from amazon_api import get_amazon_products
-from telegram_bot import send_telegram_message
+import requests
 
-# Lista delle variabili d'ambiente richieste (senza RUN_ONCE)
-REQUIRED_ENV_VARS = [
-    "AMAZON_ACCESS_KEY",
-    "AMAZON_SECRET_KEY",
-    "AMAZON_ASSOCIATE_TAG",
-    "AMAZON_COUNTRY",
-    "BITLY_TOKEN",
-    "ITEM_COUNT",
-    "KEYWORDS",
-    "MIN_SAVE",
-    "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_CHAT_ID"
-]
+# Funzione aggiornata per accettare token, chat_id e message
+def send_telegram_message(token, chat_id, message):
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": message}
+    response = requests.post(url, data=payload)
+    if response.status_code != 200:
+        raise Exception(f"Errore Telegram API: {response.status_code} - {response.text}")
 
-def check_env_vars():
-    """Controlla che tutte le variabili d'ambiente richieste siano presenti."""
-    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
-    if missing:
-        print(f"❌ Mancano le seguenti variabili d'ambiente: {', '.join(missing)}")
-        sys.exit(1)
+def check_env_variables():
+    required_vars = [
+        "AMAZON_ACCESS_KEY",
+        "AMAZON_SECRET_KEY",
+        "AMAZON_ASSOCIATE_TAG",
+        "AMAZON_COUNTRY",
+        "BITLY_TOKEN",
+        "ITEM_COUNT",
+        "KEYWORDS",
+        "MIN_SAVE",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID"
+    ]
+    
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        print(f"❌ Mancano le seguenti variabili d'ambiente: {', '.join(missing_vars)}")
+        exit(1)
     else:
         print("✅ Tutte le variabili d'ambiente sono presenti.")
 
 def main():
-    check_env_vars()
-
+    check_env_variables()
+    
     keywords = os.getenv("KEYWORDS")
-    item_count = int(os.getenv("ITEM_COUNT", "10"))
-    min_save = float(os.getenv("MIN_SAVE", "0"))
-
-    products = get_amazon_products(
-        keywords=keywords,
-        amazon_access_key=os.getenv("AMAZON_ACCESS_KEY"),
-        amazon_secret_key=os.getenv("AMAZON_SECRET_KEY"),
-        amazon_tag=os.getenv("AMAZON_ASSOCIATE_TAG")
-    )
-
-    if not products:
-        print("⚠ Nessun prodotto trovato.")
-        return
-
-    for product in products[:item_count]:
-        title = product.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
-        price_info = product.get("Offers", {}).get("Listings", [{}])[0].get("Price", {})
-        price = price_info.get("DisplayAmount", "Prezzo non disponibile")
-
-        message = f"🛒 {title}\n💰 {price}"
+    amazon_access_key = os.getenv("AMAZON_ACCESS_KEY")
+    amazon_secret_key = os.getenv("AMAZON_SECRET_KEY")
+    amazon_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
+    
+    try:
+        products = get_amazon_products(keywords, amazon_access_key, amazon_secret_key, amazon_tag)
+        
+        if not products:
+            message = "Nessun prodotto trovato."
+        else:
+            message = "Prodotti trovati:\n" + "\n".join([p["ItemInfo"]["Title"]["DisplayValue"] for p in products])
+        
         send_telegram_message(os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID"), message)
+    
+    except Exception as e:
+        send_telegram_message(os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID"), f"Errore: {e}")
 
 if __name__ == "__main__":
     main()
