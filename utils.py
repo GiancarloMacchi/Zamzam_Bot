@@ -1,44 +1,55 @@
 import os
-import requests
 import logging
+import requests
+from amazon_paapi import AmazonApi
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+def get_amazon_client():
+    return AmazonApi(
+        os.getenv("AMAZON_ACCESS_KEY"),
+        os.getenv("AMAZON_SECRET_KEY"),
+        os.getenv("AMAZON_ASSOCIATE_TAG"),
+        os.getenv("AMAZON_COUNTRY", "IT")
+    )
 
-def send_telegram_message(text, chat_id):
-    """
-    Invia un messaggio di testo a Telegram con formattazione Markdown.
-    """
+def search_amazon_products(client, keyword, min_discount):
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "Markdown",
-            "disable_web_page_preview": False
-        }
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        logging.info("Messaggio inviato a Telegram")
-    except Exception as e:
-        logging.error(f"Errore nell'invio del messaggio Telegram: {e}")
+        result = client.search_items(keywords=keyword, item_count=int(os.getenv("ITEM_COUNT", 10)))
 
-def get_discount_percentage(product):
-    """
-    Calcola lo sconto in percentuale da un prodotto Amazon.
-    Restituisce None se non disponibile.
-    """
-    try:
-        if not hasattr(product, "offers") or not product.offers:
-            return None
+        items = getattr(result, "items", None)
+        if items is None and hasattr(result, "search_result"):
+            items = getattr(result.search_result, "items", [])
 
-        offer = product.offers[0]  # Prende la prima offerta disponibile
-        if hasattr(offer, "list_price") and hasattr(offer, "price"):
-            list_price = offer.list_price.amount
-            current_price = offer.price.amount
-            if list_price and current_price and list_price > current_price:
-                discount = round(((list_price - current_price) / list_price) * 100)
-                return discount
-        return None
+        if not items:
+            return []
+
+        filtered = []
+        for item in items:
+            try:
+                if not hasattr(item, "offers") or not item.offers:
+                    continue
+
+                offer = item.offers.listings[0]
+                price = offer.price.amount
+                savings = offer.price.savings.amount if offer.price.savings else 0
+                discount = (savings / (price + savings) * 100) if price + savings > 0 else 0
+
+                if discount >= min_discount:
+                    filtered.append(format_product_message(item, discount))
+            except Exception as e:
+                logging.error(f"Errore nel parsing di un prodotto: {e}")
+        return filtered
     except Exception as e:
-        logging.error(f"Errore nel calcolo dello sconto: {e}")
-        return None
+        logging.error(f"Errore nella ricerca Amazon: {e}")
+        return []
+
+def format_product_message(item, discount):
+    title = getattr(item, "item_info", {}).get("title", {}).get("display_value", "Prodotto senza titolo")
+    url = getattr(item, "detail_page_url", "")
+    return f"🔥 {title}\nSconto: {discount:.0f}%\n{url}"
+
+def send_telegram_message(message):
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = {"chat_id": chat_id, "text": message}
+    requests.post(url, data=data)
