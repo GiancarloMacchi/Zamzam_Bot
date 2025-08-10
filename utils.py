@@ -1,15 +1,18 @@
 import os
 import logging
+from datetime import datetime
 from amazon_paapi import AmazonApi
 import bitlyshortener
 
-# Configurazione logging su file + console
+# Nome file log con data e ora
+log_filename = f"bot_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("bot.log", encoding="utf-8"),  # log su file
-        logging.StreamHandler()  # log su console
+        logging.FileHandler(log_filename, encoding="utf-8"),
+        logging.StreamHandler()
     ]
 )
 
