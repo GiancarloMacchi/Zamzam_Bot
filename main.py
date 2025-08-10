@@ -1,50 +1,29 @@
 import os
-from utils import search_amazon_products, send_telegram_message
+from utils import cerca_prodotti, KEYWORDS
+import telegram
 
-MIN_DISCOUNT = int(os.getenv("MIN_SAVE", 20))
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+MIN_SAVE = int(os.getenv("MIN_SAVE", 30))
 
-CATEGORIES = [
-    "prodotti per bambini",
-    "giocattoli",
-    "articoli per la scuola",
-    "accessori per neonati",
-    "libri per bambini",
-    "abbigliamento bambini",
-    "articoli per genitori",
-    "seggiolini auto",
-    "passeggini",
-    "giochi educativi"
-]
+bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
 
 def main():
-    for category in CATEGORIES:
-        try:
-            products = search_amazon_products(category)
-        except Exception as e:
-            print(f"Errore nella ricerca per '{category}': {e}")
-            continue
-
-        for product in products:
+    for keyword in KEYWORDS:
+        prodotti = cerca_prodotti(keyword)
+        for p in prodotti:
             try:
-                if not product.get("Offers"):
-                    continue
+                if p["risparmio"] and "%" in p["risparmio"]:
+                    # Estrae solo numero percentuale
+                    percent = int("".join(filter(str.isdigit, p["risparmio"])))
+                    if percent < MIN_SAVE:
+                        continue
 
-                offer = product["Offers"][0]
-                price = offer["Price"]["Amount"]
-                list_price = offer["Price"]["ListPrice"]["Amount"]
-                discount = round((list_price - price) / list_price * 100, 2)
-
-                if discount >= MIN_DISCOUNT:
-                    message = (
-                        f"📦 {product['ItemInfo']['Title']['DisplayValue']}\n"
-                        f"💰 Prezzo: {price}€ (Sconto {discount}%)\n"
-                        f"🔗 {product['DetailPageURL']}"
-                    )
-                    send_telegram_message(message)
-
+                messaggio = f"🔍 *{p['titolo']}*\n💰 Prezzo: {p['prezzo']}\n" \
+                            f"💸 Risparmio: {p['risparmio']}\n🔗 [Acquista qui]({p['url']})"
+                bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=messaggio, parse_mode="Markdown")
             except Exception as e:
-                print(f"Errore nel processare un prodotto: {e}")
-                continue
+                print(f"Errore invio Telegram: {e}")
 
 if __name__ == "__main__":
     main()
