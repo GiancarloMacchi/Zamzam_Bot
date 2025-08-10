@@ -14,9 +14,12 @@ if not all([access_key, secret_key, partner_tag]):
 # Inizializzo l'API
 amazon = AmazonApi(access_key, secret_key, partner_tag, region)
 
-# Esempio ricerca
+# Esempio di ricerca prodotti
 try:
-    products = amazon.search_products(keywords="laptop", search_index="All")
+    products = amazon.search_items(
+        keywords="laptop",
+        search_index="All"
+    )
     for product in products:
         print(f"{product.title} - {product.detail_page_url}")
 except Exception as e:
