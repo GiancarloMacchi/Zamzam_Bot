@@ -23,7 +23,7 @@ bot = Bot(token=telegram_token)
 def main():
     try:
         # 🔍 Ricerca prodotti (puoi cambiare le keywords)
-        products = amazon.search_products(keywords="laptop", search_index="All", item_count=3)
+        products = amazon.search_items(keywords="laptop", search_index="All", item_count=3)
 
         if not products:
             bot.send_message(chat_id=telegram_chat_id, text="Nessun prodotto trovato.")
