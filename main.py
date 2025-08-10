@@ -1,41 +1,51 @@
 import os
-from dotenv import load_dotenv
-from amazon_api import get_amazon_products
+import time
+from amazon_api import cerca_prodotti  # importa la tua funzione Amazon
+from telegram import invia_messaggio   # importa la tua funzione Telegram
 
-load_dotenv()
+def check_env_vars():
+    required_vars = [
+        "AMAZON_ACCESS_KEY",
+        "AMAZON_SECRET_KEY",
+        "AMAZON_ASSOCIATE_TAG",
+        "AMAZON_COUNTRY",
+        "BITLY_TOKEN",
+        "ITEM_COUNT",
+        "KEYWORDS",
+        "MIN_SAVE",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID",
+        "RUN_ONCE"
+    ]
 
-def run_bot():
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    if missing_vars:
+        print(f"❌ Errore: variabili d'ambiente mancanti: {', '.join(missing_vars)}")
+        return False
+    return True
+
+def main():
     print("🚀 Avvio bot Amazon...")
 
-    # Leggi le variabili d'ambiente
-    keywords = os.getenv("AMAZON_KEYWORDS")
-    amazon_access_key = os.getenv("AMAZON_ACCESS_KEY")
-    amazon_secret_key = os.getenv("AMAZON_SECRET_KEY")
-    amazon_tag = os.getenv("AMAZON_TAG")
-    amazon_region = os.getenv("AMAZON_REGION")
-    amazon_host = os.getenv("AMAZON_HOST")
-
-    if not all([keywords, amazon_access_key, amazon_secret_key, amazon_tag, amazon_region]):
-        print("❌ Errore: una o più variabili d'ambiente mancanti.")
+    # Controllo variabili
+    if not check_env_vars():
         return
 
-    # Chiamata aggiornata con i nomi parametri corretti
-    products = get_amazon_products(
-        keywords=keywords,
-        amazon_access_key=amazon_access_key,
-        amazon_secret_key=amazon_secret_key,
-        amazon_tag=amazon_tag,
-        region=amazon_region,  # corretto da 'amazon_region'
-        host=amazon_host
-    )
+    keywords = os.getenv("KEYWORDS").split(",")
+    min_save = int(os.getenv("MIN_SAVE"))
+    item_count = int(os.getenv("ITEM_COUNT"))
+    run_once = os.getenv("RUN_ONCE", "true").lower() == "true"
 
-    if not products:
-        print("❌ Nessun prodotto trovato.")
-        return
+    while True:
+        for keyword in keywords:
+            prodotti = cerca_prodotti(keyword.strip(), min_save, item_count)
+            for prodotto in prodotti:
+                invia_messaggio(prodotto)
 
-    print(f"✅ Trovati {len(products)} prodotti:")
-    for product in products:
-        print(f"- {product['title']} ({product['url']})")
+        if run_once:
+            break
+
+        time.sleep(3600)  # attesa 1 ora
 
 if __name__ == "__main__":
-    run_bot()
+    main()
