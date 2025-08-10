@@ -19,10 +19,10 @@ from amazon_paapi import AmazonApi  # la libreria installata dal repo git
 # --- CONFIG / ENV ---
 AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")  # il tuo secret si chiama così
-AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")        # CORRETTO: AMAZON_COUNTRY
+AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")  # CORRETTO: AMAZON_COUNTRY
 KEYWORDS = os.environ.get("KEYWORDS", "cuffie,smartwatch,aspirapolvere,auricolari").split(",")
-MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))
+MIN_SAVE = int(os.environ.get("MIN_SAVE", "20"))  # filtro minimo sconto
 ITEM_COUNT = int(os.environ.get("ITEM_COUNT", "8"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -38,7 +38,7 @@ log = logging.getLogger("post-deal")
 
 # --- Helper Telegram ---
 def send_telegram_message(text: str) -> Optional[dict]:
-    """Invia messaggio di testo su Telegram. Ritorna JSON della risposta o None."""
+    """Invia messaggio di testo su Telegram."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         log.warning("Telegram non configurato: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID mancanti.")
         return None
@@ -85,7 +85,7 @@ except Exception as e:
     sys.exit(1)
 
 def pick_deal():
-    """Cerca tra le keywords e ritorna l'offerta con il maggior saving trovato (se disponibile)."""
+    """Cerca tra le keywords e ritorna l'offerta con il maggior saving sopra MIN_SAVE."""
     best = None
     failed_keywords = 0
 
@@ -95,21 +95,17 @@ def pick_deal():
             continue
         log.info("🔎 Cerco: %s", kw)
         try:
-            # ATTENZIONE: non passiamo 'resources' (causa bug in alcuni wrapper)
             res = amazon.search_items(keywords=kw, item_count=ITEM_COUNT)
         except Exception as e:
             log.warning("❌ Errore ricerca '%s': %s", kw, e)
             failed_keywords += 1
-            # se ricevi rate-limit, aumenta throttling o diminuisci ITEM_COUNT
             time.sleep(1.0)
             continue
 
         items = getattr(res, "items", []) or []
         for it in items:
             try:
-                # titolo
                 title = getattr(it.item_info.title, "display_value", None) or "Prodotto Amazon"
-                # immagine (varia a seconda della risposta)
                 img = None
                 try:
                     img = getattr(it.images.primary.large, "url", None)
@@ -118,9 +114,7 @@ def pick_deal():
                         img = getattr(it.images.primary, "url", None)
                     except Exception:
                         img = None
-                # url
                 url = getattr(it, "detail_page_url", None)
-                # prezzo display / amount
                 price = None
                 try:
                     price = it.offers.listings[0].price.display_amount
@@ -138,7 +132,11 @@ def pick_deal():
                 except Exception:
                     saving_pct = None
 
-                score = saving_pct or 0
+                # FILTRO sconto minimo
+                if saving_pct is None or saving_pct < MIN_SAVE:
+                    continue
+
+                score = saving_pct
                 if best is None or (score and score > (best.get("saving_pct") or 0)):
                     best = {
                         "title": title,
@@ -149,7 +147,6 @@ def pick_deal():
                         "keyword": kw
                     }
             except Exception:
-                # ignora singolo item se qualcosa manca
                 continue
 
     return best, failed_keywords
@@ -167,26 +164,24 @@ def make_caption(item):
     if url:
         lines.append(f"\n🛒 Compra qui: {url}")
     lines.append("\n(Questo è un link affiliato — grazie se acquisti con il mio codice!)")
-    caption = "\n".join(lines)
-    return caption[:1000]
+    return "\n".join(lines)[:1000]
 
 def main():
     try:
         deal, failed_keywords = pick_deal()
         if not deal:
-            msg = "Nessuna offerta trovata (prova a ridurre MIN_SAVE o ampliare KEYWORDS)."
+            msg = f"Nessuna offerta trovata con sconto ≥ {MIN_SAVE}%."
             log.info(msg)
             send_telegram_message(msg)
             return
 
         caption = make_caption(deal)
         if not deal.get("img"):
-            # se non c'è immagine, pubblichiamo solo testo
             log.info("Offerta trovata ma senza immagine, pubblico solo testo.")
             send_telegram_message(caption)
             return
 
-        log.info(f"Pubblico: {deal['title']} (risparmio: {deal.get('saving_pct')})")
+        log.info(f"Pubblico: {deal['title']} (risparmio: {deal.get('saving_pct')}%)")
         send_telegram_photo(deal["img"], caption)
         log.info("Fatto. Keyword fallite: %d", failed_keywords)
     except Exception as e:
