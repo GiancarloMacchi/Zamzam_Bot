@@ -1,79 +1,49 @@
-import requests
+import os
 import logging
-from paapi5_python_sdk.api.default_api import DefaultApi
-from paapi5_python_sdk.models import *
+from amazon_paapi import AmazonApi
+import bitlyshortener
 
-def cerca_prodotti(access_key, secret_key, associate_tag, country):
-    # Imposta API Amazon
-    from paapi5_python_sdk.api_client import ApiClient
-    from paapi5_python_sdk.configuration import Configuration
+# Configurazione logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    config = Configuration(
-        access_key=access_key,
-        secret_key=secret_key,
-        host=f"webservices.amazon.{country}"
+def get_amazon_client():
+    return AmazonApi(
+        os.getenv("AMAZON_ACCESS_KEY"),
+        os.getenv("AMAZON_SECRET_KEY"),
+        os.getenv("AMAZON_ASSOCIATE_TAG"),
+        country=os.getenv("AMAZON_COUNTRY", "IT")
     )
 
-    api_client = ApiClient(configuration=config)
-    api = DefaultApi(api_client)
-
-    # Categorie target
-    keywords = ["infanzia", "bambini", "genitori", "scuola", "pannolini", "giocattoli"]
-
-    request = SearchItemsRequest(
-        partner_tag=associate_tag,
-        partner_type="Associates",
-        marketplace=f"www.amazon.{country}",
-        keywords=" ".join(keywords),
-        search_index="All",
-        item_count=10
-    )
-
-    response = api.search_items(request)
-    return response.search_result.items if response.search_result else []
-
-def ha_offerte(prodotto):
-    return hasattr(prodotto, "offers") and prodotto.offers is not None
-
-def filtro_categoria(prodotto):
-    categorie_target = ["infanzia", "bambini", "scuola", "pannolini", "giocattoli"]
-    if hasattr(prodotto, "item_info") and hasattr(prodotto.item_info, "classifications"):
-        classif = prodotto.item_info.classifications
-        if hasattr(classif, "binding") and classif.binding and classif.binding.display_value:
-            binding = classif.binding.display_value.lower()
-            return any(cat in binding for cat in categorie_target)
-    return False
-
-def filtro_sconto(prodotto, minimo_percentuale):
+def shorten_url(url):
     try:
-        price = prodotto.offers.listings[0].price
-        if price.savings and price.savings.percentage:
-            return price.savings.percentage >= minimo_percentuale
-    except Exception:
-        pass
-    return False
+        tokens_pool = [os.getenv("BITLY_TOKEN")]
+        shortener = bitlyshortener.Shortener(tokens=tokens_pool, max_cache_size=256)
+        return shortener.shorten_urls([url])[0]
+    except Exception as e:
+        logging.error(f"Errore nel creare short link: {e}")
+        return url
 
-def filtro_lingua(prodotto, codice_lang="it"):
-    try:
-        if hasattr(prodotto, "item_info") and hasattr(prodotto.item_info, "languages"):
-            langs = prodotto.item_info.languages.display_values
-            return any(codice_lang in lang.value.lower() for lang in langs)
-    except Exception:
-        pass
-    return True  # Se non c'è info lingua, non filtriamo
-    return False
+def filter_products(items, min_discount=20):
+    filtered = []
+    for item in items:
+        try:
+            if not hasattr(item, "offers") or not item.offers:
+                continue
+            
+            price_info = item.offers.listings[0].price
+            if not price_info.savings:
+                continue
+            
+            discount = int(price_info.savings.percentage)
+            if discount < min_discount:
+                continue
 
-def formatta_messaggio(prodotto):
-    titolo = prodotto.item_info.title.display_value if hasattr(prodotto.item_info, "title") else "Prodotto senza titolo"
-    url = prodotto.detail_page_url
-    prezzo = prodotto.offers.listings[0].price.display_amount if hasattr(prodotto.offers.listings[0].price, "display_amount") else "N/D"
-    sconto = prodotto.offers.listings[0].price.savings.percentage if hasattr(prodotto.offers.listings[0].price, "savings") else 0
+            category = (item.product_info.get("Category", "") or "").lower()
+            if not any(keyword in category for keyword in ["infanzia", "bambini", "scuola", "genitori"]):
+                continue
 
-    return f"📌 {titolo}\n💰 Prezzo: {prezzo}\n📉 Sconto: {sconto}%\n🔗 {url}"
-
-def invia_telegram(token, chat_id, messaggio):
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": messaggio}
-    r = requests.post(url, data=payload)
-    if r.status_code != 200:
-        logging.error(f"Errore Telegram: {r.text}")
+            filtered.append(item)
+        except Exception as e:
+            logging.warning(f"Errore nel filtrare un prodotto: {e}")
+            continue
+    return filtered
