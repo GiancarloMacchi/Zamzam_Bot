@@ -1,12 +1,29 @@
 import os
 import logging
-from amazon_paapi import AmazonApi
+from amazon_api import get_amazon_products
 from utils import shorten_url, send_telegram_message
 
-# Configurazione logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Carica le variabili d'ambiente
+# Legge le variabili d'ambiente
+required_vars = [
+    "AMAZON_ACCESS_KEY",
+    "AMAZON_SECRET_KEY",
+    "AMAZON_ASSOCIATE_TAG",
+    "AMAZON_COUNTRY",
+    "BITLY_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+    "ITEM_COUNT",
+    "KEYWORDS",
+    "MIN_SAVE"
+]
+
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    logging.error(f"❌ Variabili mancanti: {', '.join(missing_vars)}")
+    exit(1)
+
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
@@ -14,59 +31,56 @@ AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
 BITLY_TOKEN = os.getenv("BITLY_TOKEN")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
-KEYWORDS = os.getenv("KEYWORDS", "bambini, infanzia, scuola").split(",")
-MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
+ITEM_COUNT = int(os.getenv("ITEM_COUNT"))
+KEYWORDS = os.getenv("KEYWORDS")
+MIN_SAVE = int(os.getenv("MIN_SAVE"))
 
-# Inizializza Amazon API
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+try:
+    products = get_amazon_products(
+        KEYWORDS,
+        AMAZON_ACCESS_KEY,
+        AMAZON_SECRET_KEY,
+        AMAZON_ASSOCIATE_TAG
+    )
+except Exception as e:
+    logging.error(f"Errore durante la richiesta ad Amazon API: {e}")
+    exit(1)
 
-def main():
-    for keyword in KEYWORDS:
-        keyword = keyword.strip()
-        logging.info(f"🔍 Ricerca per keyword: {keyword}")
+if not products:
+    logging.info("Nessun prodotto trovato.")
+    exit(0)
 
-        try:
-            products = amazon.search_items(keywords=keyword, item_count=ITEM_COUNT)
-        except Exception as e:
-            logging.error(f"Errore durante la ricerca per '{keyword}': {e}")
+for product in products:
+    try:
+        title = product.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
+        image_url = product.get("Images", {}).get("Primary", {}).get("Medium", {}).get("URL")
+        offers = product.get("Offers", {}).get("Listings", [])
+
+        if not offers:
+            logging.info(f"⏩ Nessuna offerta per '{title}', salto...")
             continue
 
-        for product in products:
-            try:
-                # Salta se non ha Offers
-                if not hasattr(product, "offers") or not product.offers:
-                    logging.warning(f"Prodotto senza Offers: {product.item_info.title.display_value}")
-                    continue
+        price_info = offers[0].get("Price", {})
+        amount = price_info.get("Amount")
+        currency = price_info.get("Currency")
 
-                offer = product.offers.listings[0]
-                price_info = offer.price
-                if not price_info or not price_info.savings:
-                    logging.warning(f"Nessun dato sullo sconto per: {product.item_info.title.display_value}")
-                    continue
+        saving_info = offers[0].get("SavingBasis", {})
+        saving_amount = saving_info.get("Amount", 0)
+        saving_percentage = 0
+        if amount and saving_amount:
+            saving_percentage = int((saving_amount - amount) / saving_amount * 100)
 
-                discount = int(price_info.savings.percentage)
-                if discount < MIN_SAVE:
-                    continue
+        if saving_percentage < MIN_SAVE:
+            logging.info(f"⏩ Sconto {saving_percentage}% inferiore al minimo per '{title}', salto...")
+            continue
 
-                title = product.item_info.title.display_value
-                image_url = product.images.primary.large.url if product.images and product.images.primary else None
-                product_url = shorten_url(product.detail_page_url, BITLY_TOKEN)
+        url = product.get("DetailPageURL")
+        short_url = shorten_url(url, BITLY_TOKEN)
 
-                message = (
-                    f"📌 *{title}*\n"
-                    f"💰 Prezzo: {price_info.display_amount}\n"
-                    f"💸 Sconto: -{discount}%\n"
-                    f"🔗 [Acquista qui]({product_url})"
-                )
+        message = f"🎯 *{title}*\n💰 Prezzo: {amount} {currency}\n📉 Sconto: {saving_percentage}%\n🔗 [Acquista qui]({short_url})"
 
-                send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, message, image_url)
+        send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, message, image_url)
 
-            except Exception as e:
-                logging.error(f"Errore prodotto: {e}")
-                continue
-
-    logging.info("✅ Invio completato")
-
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        logging.error(f"Errore nel processare un prodotto: {e}")
+        continue
