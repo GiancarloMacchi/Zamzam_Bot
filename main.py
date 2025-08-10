@@ -4,7 +4,7 @@ from amazon_paapi import AmazonApi
 # Recupero variabili d'ambiente
 access_key = os.environ.get("AMAZON_ACCESS_KEY")
 secret_key = os.environ.get("AMAZON_SECRET_KEY")
-partner_tag = os.environ.get("AMAZON_PARTNER_TAG")
+partner_tag = os.environ.get("AMAZON_ASSOCIATE_TAG")
 region = os.environ.get("AMAZON_REGION", "IT")
 
 # Controllo variabili
