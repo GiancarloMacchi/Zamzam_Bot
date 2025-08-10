@@ -1,49 +1,40 @@
+import os
 import logging
 from amazon_paapi import AmazonApi
-from amazon_paapi.models import SearchItemsRequest, SearchItemsResource
-import os
 
-# Configura logging
-logging.basicConfig(level=logging.INFO, format="***%(asctime)s - %(levelname)s - %(message)s")
-
-# Variabili ambiente
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-
-# Inizializza Amazon API
-amazon = AmazonApi(
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    country=AMAZON_COUNTRY
+# Configurazione logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="***%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Lista keywords
-keywords = ["mamme", "neonati", "prima infanzia"]
+# Credenziali e configurazione Amazon PAAPI
+ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-# Risorse da richiedere
-resources = [
-    SearchItemsResource.ITEMINFO_TITLE,
-    SearchItemsResource.OFFERS_LISTINGS_PRICE,
-    SearchItemsResource.IMAGES_PRIMARY_LARGE
+# Lista keyword (puoi modificarla o caricarla da un file)
+KEYWORDS = [
+    "mamme", "genitori", "neonati", "prima infanzia",
+    "bambini", "giochi educativi", "scuola", "zaini scuola",
+    "libri scolastici", "adolescenti", "genitorialità"
 ]
 
-# Esegui ricerca per ogni keyword
+# Inizializza client Amazon
+amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, country=COUNTRY)
+
+# Contatore keyword fallite
 failed_keywords = 0
-for kw in keywords:
+
+# Esegui ricerca per ogni keyword
+for kw in KEYWORDS:
     logging.info(f"🔍 Cerco: {kw}")
     try:
-        request = SearchItemsRequest(
-            keywords=kw,
-            search_index="All",
-            resources=resources
-        )
-        response = amazon.search_items(request)
-        logging.info(f"Trovati {len(response.items)} risultati per '{kw}'")
+        results = amazon.search_products(keywords=kw, search_index="All")
+        logging.info(f"✅ {len(results)} risultati trovati per '{kw}'")
     except Exception as e:
         failed_keywords += 1
-        logging.error(f"Errore ricerca '{kw}': {e}")
+        logging.error(f"❌ Errore ricerca '{kw}': {e}")
 
-logging.info(f"❌ Keyword fallite: {failed_keywords}")
+logging.info(f"📊 Keyword fallite: {failed_keywords}")
