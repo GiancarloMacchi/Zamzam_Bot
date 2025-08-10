@@ -1,48 +1,79 @@
 import os
-import requests
 from amazon_paapi import AmazonApi
+import bitlyshortener
 
-amazon = AmazonApi(
-    os.getenv("AMAZON_ACCESS_KEY"),
-    os.getenv("AMAZON_SECRET_KEY"),
-    os.getenv("AMAZON_ASSOCIATE_TAG"),
-    os.getenv("AMAZON_COUNTRY")
-)
+# Carica variabili ambiente
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-def search_amazon_products(keywords):
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 30))
+KEYWORDS = os.getenv("KEYWORDS", "").split(",")
+
+# Inizializza API Amazon
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+
+# Inizializza Bitly
+shortener = bitlyshortener.Shortener(tokens=[BITLY_TOKEN], max_cache_size=256)
+
+def cerca_prodotti(keyword):
     try:
-        result = amazon.search_items(
-            keywords=keywords,
-            search_index="All",
-            item_count=int(os.getenv("ITEM_COUNT", 10))
+        results = amazon.search_items(
+            keywords=keyword.strip(),
+            item_count=ITEM_COUNT,
+            resources=[
+                "Images.Primary.Medium",
+                "ItemInfo.Title",
+                "ItemInfo.Features",
+                "ItemInfo.ByLineInfo",
+                "Offers.Listings.Price",
+                "Offers.Listings.SavingBasis",
+                "Offers.Listings.Promotions",
+                "ItemInfo.ContentInfo",
+                "ItemInfo.ProductInfo",
+                "ItemInfo.TechnicalInfo",
+                "ItemInfo.Classifications",
+                "ItemInfo.Languages"
+            ],
+            search_index="All"
         )
 
-        # Restituiamo solo gli item
-        items = getattr(result, "items", [])
+        prodotti_filtrati = []
+        for item in results.items:
+            try:
+                # Filtro lingua italiana
+                lingua = None
+                if hasattr(item.item_info, "languages") and item.item_info.languages.display_values:
+                    lingua = item.item_info.languages.display_values[0].value.lower()
 
-        # Filtro lingua italiana se disponibile nei metadata
-        filtered_items = []
-        for item in items:
-            lang_info = (
-                item.get("ItemInfo", {})
-                    .get("Languages", {})
-                    .get("DisplayValues", [])
-            )
-            if not lang_info or any("Italian" in str(l) for l in lang_info):
-                filtered_items.append(item)
+                if lingua and "ital" not in lingua:
+                    continue
 
-        return filtered_items
+                titolo = getattr(item.item_info.title, "display_value", "Senza titolo")
+                url = shortener.shorten_urls([item.detail_page_url])[0] if item.detail_page_url else None
+
+                prezzo = None
+                risparmio = None
+                if hasattr(item.offers, "listings") and item.offers.listings:
+                    prezzo = item.offers.listings[0].price.display_amount
+                    if hasattr(item.offers.listings[0], "saving_basis") and item.offers.listings[0].saving_basis:
+                        risparmio = item.offers.listings[0].saving_basis.display_amount
+
+                prodotti_filtrati.append({
+                    "titolo": titolo,
+                    "prezzo": prezzo,
+                    "risparmio": risparmio,
+                    "url": url
+                })
+
+            except Exception as e:
+                print(f"Errore parsing prodotto: {e}")
+
+        return prodotti_filtrati
 
     except Exception as e:
         print(f"Errore nella ricerca Amazon: {e}")
         return []
-
-def send_telegram_message(message):
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message}
-    try:
-        requests.post(url, data=payload)
-    except Exception as e:
-        print(f"Errore nell'invio Telegram: {e}")
