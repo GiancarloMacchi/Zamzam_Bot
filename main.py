@@ -3,7 +3,14 @@ import logging
 from utils import get_amazon_client, shorten_url, filter_products
 from telegram import Bot
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
 
 def main():
     bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
@@ -14,13 +21,22 @@ def main():
 
     for keyword in keywords:
         try:
+            logging.info(f"🔍 Ricerca Amazon per keyword: {keyword}")
             items = amazon.search_items(
                 keywords=keyword,
                 item_count=int(os.getenv("ITEM_COUNT", 10)),
-                resources=["Images.Primary.Large", "ItemInfo.Title", "Offers.Listings.Price", "Offers.Listings.SavingBasis.Price", "Offers.Listings.Savings"]
+                resources=[
+                    "Images.Primary.Large",
+                    "ItemInfo.Title",
+                    "Offers.Listings.Price",
+                    "Offers.Listings.SavingBasis.Price",
+                    "Offers.Listings.Savings",
+                    "ItemInfo.ProductInfo"
+                ]
             )
 
             filtered_items = filter_products(items)
+            logging.info(f"✅ Prodotti filtrati per '{keyword}': {len(filtered_items)}")
 
             for item in filtered_items:
                 try:
@@ -29,6 +45,7 @@ def main():
                     discount = item.offers.listings[0].price.savings.percentage
                     message = f"🎯 {title}\n💰 Sconto: {discount}%\n🔗 {url}"
                     bot.send_message(chat_id=chat_id, text=message)
+                    logging.info(f"📤 Inviato: {title} ({discount}%)")
                 except Exception as e:
                     logging.error(f"Errore nell'invio di un prodotto: {e}")
                     continue
