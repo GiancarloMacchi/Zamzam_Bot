@@ -1,48 +1,36 @@
-import logging
+import os
 from amazon_paapi import AmazonApi
+from dotenv import load_dotenv
 
-# --- CONFIGURAZIONE ---
-ACCESS_KEY = "TUO_ACCESS_KEY"
-SECRET_KEY = "TUO_SECRET_KEY"
-TAG = "TUO_ASSOCIATE_TAG"
-REGION = "IT"
+# Carica variabili d'ambiente dal file .env
+load_dotenv()
 
-# Inizializza logger
-logging.basicConfig(level=logging.INFO, format="***%(asctime)s - %(levelname)s - %(message)s")
+ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+PARTNER_TAG = os.getenv("AMAZON_PARTNER_TAG")
+REGION = os.getenv("AMAZON_REGION", "IT")  # Default Italia
 
-# Inizializza API Amazon
-amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, TAG, REGION)
+# Inizializza il client API
+amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, PARTNER_TAG, REGION)
 
-# Lista keyword da cercare
-keywords = [
-    "mamme",
-    "prima infanzia",
-    "bambini",
-    "scuola",
-    "libri scuola",
-    "genitorialità"
-]
-
-fallite = 0
-
-for kw in keywords:
-    logging.info(f"🔍 Cerco: {kw}")
+def search_items(keywords, search_index="All", item_count=5):
+    """
+    Cerca prodotti su Amazon usando le API PA-API 5.0
+    """
     try:
-        results = amazon.search_products(
-            keywords=kw,
-            search_index="All",
-            item_count=5
+        results = amazon.search_items(
+            keywords=keywords,
+            search_index=search_index,
+            item_count=item_count
         )
-
-        if not results:
-            logging.warning(f"Nessun risultato per '{kw}'")
-            fallite += 1
-        else:
-            for item in results:
-                logging.info(f"- {item.title} | {item.detail_page_url}")
-
+        for item in results.items:
+            print(f"Titolo: {item.item_info.title.display_value}")
+            print(f"ASIN: {item.asin}")
+            if item.detail_page_url:
+                print(f"URL: {item.detail_page_url}")
+            print("-" * 40)
     except Exception as e:
-        logging.error(f"Errore ricerca '{kw}': {e}")
-        fallite += 1
+        print(f"Errore durante la ricerca: {e}")
 
-logging.info(f"❌ Keyword fallite: {fallite}")
+if __name__ == "__main__":
+    search_items("laptop")
