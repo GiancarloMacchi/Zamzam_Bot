@@ -1,40 +1,48 @@
-import os
 import logging
 from amazon_paapi import AmazonApi
 
-# Configurazione logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="***%(asctime)s - %(levelname)s - %(message)s"
-)
+# --- CONFIGURAZIONE ---
+ACCESS_KEY = "TUO_ACCESS_KEY"
+SECRET_KEY = "TUO_SECRET_KEY"
+TAG = "TUO_ASSOCIATE_TAG"
+REGION = "IT"
 
-# Credenziali e configurazione Amazon PAAPI
-ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+# Inizializza logger
+logging.basicConfig(level=logging.INFO, format="***%(asctime)s - %(levelname)s - %(message)s")
 
-# Lista keyword (puoi modificarla o caricarla da un file)
-KEYWORDS = [
-    "mamme", "genitori", "neonati", "prima infanzia",
-    "bambini", "giochi educativi", "scuola", "zaini scuola",
-    "libri scolastici", "adolescenti", "genitorialità"
+# Inizializza API Amazon
+amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, TAG, REGION)
+
+# Lista keyword da cercare
+keywords = [
+    "mamme",
+    "prima infanzia",
+    "bambini",
+    "scuola",
+    "libri scuola",
+    "genitorialità"
 ]
 
-# Inizializza client Amazon
-amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, country=COUNTRY)
+fallite = 0
 
-# Contatore keyword fallite
-failed_keywords = 0
-
-# Esegui ricerca per ogni keyword
-for kw in KEYWORDS:
+for kw in keywords:
     logging.info(f"🔍 Cerco: {kw}")
     try:
-        results = amazon.search_products(keywords=kw, search_index="All")
-        logging.info(f"✅ {len(results)} risultati trovati per '{kw}'")
-    except Exception as e:
-        failed_keywords += 1
-        logging.error(f"❌ Errore ricerca '{kw}': {e}")
+        results = amazon.search_products(
+            keywords=kw,
+            search_index="All",
+            item_count=5
+        )
 
-logging.info(f"📊 Keyword fallite: {failed_keywords}")
+        if not results:
+            logging.warning(f"Nessun risultato per '{kw}'")
+            fallite += 1
+        else:
+            for item in results:
+                logging.info(f"- {item.title} | {item.detail_page_url}")
+
+    except Exception as e:
+        logging.error(f"Errore ricerca '{kw}': {e}")
+        fallite += 1
+
+logging.info(f"❌ Keyword fallite: {fallite}")
