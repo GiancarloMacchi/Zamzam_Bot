@@ -1,4 +1,4 @@
-git+https://github.com/yoavaviram/python-amazon-paapi.git
+https://github.com/yoavaviram/python-amazon-paapi/archive/refs/heads/master.zip
 python-telegram-bot==20.3
 requests
 beautifulsoup4
