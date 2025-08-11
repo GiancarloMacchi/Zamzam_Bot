@@ -1,2 +1,2 @@
+python-amazon-paapi
 requests
-python-telegram-bot==20.3
