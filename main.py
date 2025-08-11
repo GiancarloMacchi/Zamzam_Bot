@@ -1,22 +1,24 @@
-from amazon_api import cerca_prodotti
-from telegram_bot import invia_messaggio
+import os
+import logging
+from utils import search_amazon_products, send_telegram_message
 
-def esegui_bot():
-    parole_chiave = os.getenv("KEYWORDS", "").split(",")
-    for keyword in parole_chiave:
-        prodotti = cerca_prodotti(keyword.strip())
-        for p in prodotti:
-            titolo = p["title"]
-            prezzo = p.get("price")
-            prezzo_scontato = p.get("discounted_price", prezzo)
-            categoria = p.get("category", "")
-            messaggio = (
-                f"📦 {titolo}\n"
-                f"Categoria: {categoria}\n"
-                f"💰 Prezzo originale: €{prezzo}\n"
-                f"🔥 Prezzo scontato: €{prezzo_scontato}\n"
-            )
-            invia_messaggio(messaggio)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+def main():
+    keywords = os.getenv("KEYWORDS", "").split(",")
+    min_discount = int(os.getenv("MIN_SAVE", 20))
+    amazon_country = os.getenv("AMAZON_COUNTRY", "IT").upper()
+
+    logging.info(f"Paese Amazon: {amazon_country}")
+    logging.info(f"Parole chiave: {keywords}")
+    logging.info(f"Sconto minimo: {min_discount}%")
+
+    for keyword in keywords:
+        products = search_amazon_products(keyword.strip(), amazon_country, min_discount)
+
+        for product in products:
+            message = f"🔥 {product['title']}\n💰 Prezzo: {product['price']}\n💸 Sconto: {product['discount']}%\n🔗 {product['url']}"
+            send_telegram_message(message)
 
 if __name__ == "__main__":
-    esegui_bot()
+    main()
