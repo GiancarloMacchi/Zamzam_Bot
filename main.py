@@ -1,32 +1,49 @@
-from amazon_paapi import AmazonApi
+from amazon_api import cerca_prodotti
+from telegram_bot import invia_messaggio
 import os
 
-def esegui_bot():
-    amazon = AmazonApi(
-        os.getenv("AMAZON_ACCESS_KEY"),
-        os.getenv("AMAZON_SECRET_KEY"),
-        os.getenv("AMAZON_ASSOCIATE_TAG"),
-        os.getenv("AMAZON_COUNTRY")
-    )
+# Parole chiave per la macro-categoria
+CATEGORIE_BAMBINI = [
+    "bambino", "bambini", "infanzia", "genitore", "genitori",
+    "scuola", "libro", "libri", "ragazzi", "ragazzo",
+    "giocattolo", "giocattoli", "videogiochi", "videogioco", "neonato", "neonati"
+]
 
-    # Esegui ricerca
-    result = amazon.search_items(
-        keywords=os.getenv("KEYWORDS"),
-        item_count=int(os.getenv("ITEM_COUNT"))
-    )
+def prodotto_in_categoria(titolo: str) -> bool:
+    titolo_lower = titolo.lower()
+    return any(keyword in titolo_lower for keyword in CATEGORIE_BAMBINI)
 
-    # Accedi correttamente alla lista di prodotti
-    if hasattr(result, "search_result") and hasattr(result.search_result, "items"):
-        prodotti = result.search_result.items
-    elif hasattr(result, "items"):  
-        prodotti = result.items
-    else:
-        prodotti = []
+def calcola_sconto(prezzo_attuale: float, prezzo_originale: float) -> float:
+    try:
+        if prezzo_originale and prezzo_originale > 0:
+            return round((prezzo_originale - prezzo_attuale) / prezzo_originale * 100, 2)
+    except Exception:
+        pass
+    return 0.0
 
-    # Itera sui prodotti
-    for prodotto in prodotti:
-        titolo = prodotto.item_info.title.display_value if prodotto.item_info and prodotto.item_info.title else "Titolo non disponibile"
-        prezzo = prodotto.offers.listings[0].price.display_amount if prodotto.offers and prodotto.offers.listings else "Prezzo non disponibile"
-        url = prodotto.detail_page_url if prodotto.detail_page_url else "URL non disponibile"
+def main():
+    risultati = cerca_prodotti()
 
-        print(f"{titolo} - {prezzo} - {url}")
+    for prodotto in risultati:
+        titolo = prodotto.get("title", "").strip()
+        prezzo_attuale = prodotto.get("price", None)
+        prezzo_originale = prodotto.get("list_price", None)
+        url = prodotto.get("url", "")
+
+        # Calcola lo sconto
+        sconto = calcola_sconto(prezzo_attuale, prezzo_originale)
+
+        # Filtro 1: sconto >= 20%
+        if sconto < 20:
+            continue
+
+        # Filtro 2: categoria bambini/genitori/scuola
+        if not prodotto_in_categoria(titolo):
+            continue
+
+        # Messaggio finale
+        messaggio = f"{titolo} - {prezzo_attuale}€ ({sconto}% di sconto) - {url}"
+        invia_messaggio(messaggio)
+
+if __name__ == "__main__":
+    main()
