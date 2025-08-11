@@ -5,52 +5,40 @@ AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-KEYWORDS = os.getenv("KEYWORDS", "bambino,neonato,giocattolo,scuola,libro")
 
-def cerca_prodotti():
-    risultati = []
+# Parole chiave per categorie ammesse
+CATEGORIE_AMMESSE = [
+    "bambini", "infanti", "genitori", "scuola",
+    "libri per ragazzi", "giocattoli", "videogiochi"
+]
 
-    for keyword in KEYWORDS.split(","):
-        keyword = keyword.strip()
-        url = f"https://api.rainforestapi.com/request"
-        params = {
-            "api_key": AMAZON_ACCESS_KEY,
-            "type": "search",
-            "amazon_domain": f"amazon.{AMAZON_COUNTRY.lower()}",
-            "search_term": keyword,
-            "sort_by": "featured",
-            "page": 1
-        }
+def prodotto_valido(prodotto):
+    """
+    Ritorna True se il prodotto ha sconto >= 20% e appartiene a una categoria ammessa.
+    """
+    try:
+        prezzo_originale = float(prodotto.get("price", 0))
+        prezzo_scontato = float(prodotto.get("discounted_price", prezzo_originale))
+        sconto = 0
+        if prezzo_originale > 0:
+            sconto = ((prezzo_originale - prezzo_scontato) / prezzo_originale) * 100
 
-        try:
-            r = requests.get(url, params=params)
-            data = r.json()
+        categoria = prodotto.get("category", "").lower()
 
-            for item in data.get("search_results", [])[:ITEM_COUNT]:
-                titolo = item.get("title", "").strip()
-                asin = item.get("asin", "")
-                link = f"https://www.amazon.{AMAZON_COUNTRY.lower()}/dp/{asin}?tag={AMAZON_ASSOCIATE_TAG}"
+        return sconto >= 20 or any(cat in categoria for cat in CATEGORIE_AMMESSE)
+    except Exception:
+        return False
 
-                prezzo_attuale = None
-                prezzo_listino = None
+def cerca_prodotti(parola_chiave):
+    """
+    Simula la chiamata all'API di Amazon e filtra i prodotti validi.
+    """
+    # Qui va implementata la chiamata reale all'API di Amazon PA-API
+    # Per esempio fittizio:
+    prodotti = [
+        {"title": "Giocattolo educativo", "price": 50, "discounted_price": 35, "category": "giocattoli"},
+        {"title": "Libro per ragazzi", "price": 20, "discounted_price": 18, "category": "libri"},
+        {"title": "Mouse da gaming", "price": 40, "discounted_price": 25, "category": "videogiochi"}
+    ]
 
-                # Prezzo attuale
-                if "price" in item and isinstance(item["price"], dict):
-                    prezzo_attuale = item["price"].get("value", None)
-
-                # Prezzo di listino (se disponibile)
-                if "list_price" in item and isinstance(item["list_price"], dict):
-                    prezzo_listino = item["list_price"].get("value", None)
-
-                risultati.append({
-                    "title": titolo,
-                    "url": link,
-                    "price": prezzo_attuale,
-                    "list_price": prezzo_listino
-                })
-
-        except Exception as e:
-            print(f"Errore nella ricerca per {keyword}: {e}")
-
-    return risultati
+    return [p for p in prodotti if prodotto_valido(p)]
