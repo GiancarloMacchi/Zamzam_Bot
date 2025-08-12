@@ -2,5 +2,5 @@ requests>=2.28
 python-dotenv>=1.0.0
 beautifulsoup4>=4.12.2
 bitlyshortener==0.6.0
-pip install paapi5-python-sdk
+paapi5-python-sdk
 python-telegram-bot>=20.0
