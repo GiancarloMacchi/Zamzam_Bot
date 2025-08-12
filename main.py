@@ -5,6 +5,9 @@ from utils import search_amazon_products, send_telegram_message
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def main():
+    def esegui_bot():
+    # logica principale
+    
     keywords = os.getenv("KEYWORDS", "").split(",")
     min_discount = int(os.getenv("MIN_SAVE", 20))
     amazon_country = os.getenv("AMAZON_COUNTRY", "IT").upper()
