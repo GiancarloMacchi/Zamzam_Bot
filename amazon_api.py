@@ -1,16 +1,19 @@
 import os
 from amazon_paapi import AmazonApi
-from dotenv import load_dotenv
 
-load_dotenv()
+# Prende le variabili direttamente dalle Repository Secrets
+AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")
 
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-
+# Inizializza l'oggetto Amazon API
+amazon = AmazonApi(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
 
 def cerca_prodotti(keywords, item_count=5, min_save=0):
     """
@@ -18,15 +21,21 @@ def cerca_prodotti(keywords, item_count=5, min_save=0):
     Mostra anche quelli senza list_price per debug.
     """
     try:
+        print(f"🔍 Ricerca prodotti con keywords: '{keywords}', "
+              f"item_count={item_count}, min_save={min_save}")
         results = amazon.search_products(
             keywords=keywords,
             item_count=item_count
         )
     except Exception as e:
-        print(f"Errore durante la ricerca: {e}")
+        print(f"❌ Errore durante la ricerca: {e}")
         return []
 
     prodotti_filtrati = []
+
+    if not results:
+        print("⚠ Nessun prodotto restituito dall'API.")
+        return prodotti_filtrati
 
     for prodotto in results:
         prezzo_listino = prodotto.list_price or 0
@@ -38,7 +47,7 @@ def cerca_prodotti(keywords, item_count=5, min_save=0):
         else:
             sconto = 0  # Nessun dato di sconto disponibile
 
-        # Mostra anche prodotti senza sconto se min_save = 0
+        # Filtraggio
         if sconto >= min_save or min_save == 0:
             prodotti_filtrati.append({
                 "titolo": prodotto.title,
@@ -48,4 +57,5 @@ def cerca_prodotti(keywords, item_count=5, min_save=0):
                 "link": prodotto.detail_page_url
             })
 
+    print(f"✅ Prodotti trovati: {len(prodotti_filtrati)}")
     return prodotti_filtrati
