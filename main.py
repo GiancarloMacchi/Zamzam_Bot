@@ -1,63 +1,45 @@
 import os
-import random
-from utils import search_amazon_products
-from telegram_bot import get_telegram_client, send_telegram_photo
+from dotenv import load_dotenv
+from amazon_api import cerca_prodotti
+from telegram_bot import invia_messaggio
 
-def create_telegram_post(product):
-    """
-    Crea un testo accattivante per il post di Telegram.
-    """
-    frasi_casuali = [
-        "Affrettati, l'offerta è pazzesca! 🏃‍♀️💨",
-        "Non fartelo scappare, è un affare d'oro! ✨",
-        "Prezzo bomba, risparmio assicurato! 💣",
-        "Wow! Lo sconto è esagerato! 🤩"
-    ]
-
-    title = product.get("title", "Offerta Amazon")
-    original_price = product.get("original_price", "-")
-    sale_price = product.get("sale_price", "-")
-    discount = product.get("discount", "-")
-    url = product.get("url", "#")
-
-    message = (
-        f"<b>{title}</b>\n\n"
-        f"Prezzo di listino: <s>{original_price}</s>\n"
-        f"<b>Prezzo offerta: {sale_price}</b>\n"
-        f"Risparmi il {discount}!\n\n"
-        f"{random.choice(frasi_casuali)}\n\n"
-        f"➡️ <a href='{url}'>Clicca qui per acquistarlo!</a>"
-    )
-
-    return message
+# Carica le variabili dal file .env
+load_dotenv()
 
 def esegui_bot():
-    """
-    Avvia la ricerca dei prodotti e invia le offerte su Telegram.
-    """
-    KEYWORDS = os.getenv("KEYWORDS", "offerte del giorno")
-    ITEM_COUNT = int(os.getenv("ITEM_COUNT", 6))
-    MIN_DISCOUNT = int(os.getenv("MIN_DISCOUNT", 20))  # sconto minimo %
+    # Recupera e valida MIN_SAVE
+    try:
+        MIN_DISCOUNT = int(os.getenv("MIN_SAVE", "20").strip() or 20)
+    except ValueError:
+        MIN_DISCOUNT = 20
 
-    print(f"🔍 Ricerca prodotti Amazon per: {KEYWORDS} | Sconto minimo: {MIN_DISCOUNT}%")
-    prodotti = search_amazon_products(KEYWORDS, ITEM_COUNT, MIN_DISCOUNT)
+    KEYWORDS = os.getenv("KEYWORDS", "").split(",")
+    ITEM_COUNT = int(os.getenv("ITEM_COUNT", "10").strip() or 10)
+    RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 
-    if not prodotti:
-        print("⚠ Nessun prodotto trovato che soddisfi i criteri.")
+    if not KEYWORDS or all(k.strip() == "" for k in KEYWORDS):
+        print("Nessuna keyword specificata. Controlla la variabile KEYWORDS.")
         return
 
-    try:
-        bot = get_telegram_client()
-        for prodotto in prodotti:
-            if not prodotto.get("image_url"):
-                print(f"⏭ Prodotto senza immagine: {prodotto.get('title')}")
-                continue
+    for keyword in KEYWORDS:
+        keyword = keyword.strip()
+        if not keyword:
+            continue
 
-            post_message = create_telegram_post(prodotto)
-            send_telegram_photo(bot, prodotto["image_url"], post_message)
-            print(f"✅ Post inviato per: {prodotto.get('title')}")
-    except Exception as e:
-        print(f"❌ Errore nell'invio a Telegram: {e}")
+        print(f"🔍 Ricerca per: {keyword}")
+        prodotti = cerca_prodotti(keyword, ITEM_COUNT, MIN_DISCOUNT)
+
+        if not prodotti:
+            print(f"Nessun prodotto trovato per '{keyword}' con sconto minimo {MIN_DISCOUNT}%.")
+            continue
+
+        for prodotto in prodotti:
+            invia_messaggio(prodotto)
+
+    if RUN_ONCE:
+        print("Esecuzione singola completata.")
+    else:
+        print("Modalità continua non implementata in questa versione.")
 
 if __name__ == "__main__":
     esegui_bot()
