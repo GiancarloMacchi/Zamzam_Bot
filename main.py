@@ -1,34 +1,51 @@
 import os
 from amazon_paapi import AmazonApi
-from bitlyshortener import Shortener
+from dotenv import load_dotenv
+import bitlyshortener
+import requests
+from bs4 import BeautifulSoup
 from telegram import Bot
 
-# Caricamento variabili d'ambiente
-amazon_access_key = os.environ["AMAZON_ACCESS_KEY"]
-amazon_secret_key = os.environ["AMAZON_SECRET_KEY"]
-amazon_tag = os.environ["AMAZON_ASSOCIATE_TAG"]
-amazon_country = os.environ["AMAZON_COUNTRY"]
-bitly_token = os.environ["BITLY_TOKEN"]
-item_count = os.environ.get("ITEM_COUNT", 5)
-keywords = os.environ.get("KEYWORDS", "").split(",")
-min_save = int(os.environ.get("MIN_SAVE", 0))
-telegram_token = os.environ["TELEGRAM_BOT_TOKEN"]
-telegram_chat_id = os.environ["TELEGRAM_CHAT_ID"]
+# Carica variabili ambiente
+load_dotenv()
 
-# Lista resources corretta
+amazon_access_key = os.getenv("AMAZON_ACCESS_KEY")
+amazon_secret_key = os.getenv("AMAZON_SECRET_KEY")
+amazon_associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
+amazon_country = os.getenv("AMAZON_COUNTRY")
+bitly_token = os.getenv("BITLY_TOKEN")
+item_count = os.getenv("ITEM_COUNT")
+keywords = os.getenv("KEYWORDS").split(",")
+min_save = int(os.getenv("MIN_SAVE"))
+telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+# Amazon API
+amazon = AmazonApi(
+    amazon_access_key,
+    amazon_secret_key,
+    amazon_associate_tag,
+    amazon_country
+)
+
+# Risorse da recuperare
 resources = [
-    "Images.Primary.Large",
     "ItemInfo.Title",
+    "ItemInfo.Features",
     "Offers.Listings.Price",
     "Offers.Listings.SavingBasis",
-    "Offers.Listings.Promotions",
-    "Offers.Listings.SavingAmount"
+    "Offers.Listings.SavingBasis.Price",
+    "Offers.Listings.SavingBasis.Percentage",
+    "Offers.Summaries.LowestPrice",
+    "Images.Primary.Large"
 ]
 
-# Inizializzazione API
-amazon = AmazonApi(amazon_access_key, amazon_secret_key, amazon_tag, amazon_country)
-shortener = Shortener(tokens=[bitly_token], max_cache_size=256)
-bot = Bot(token=telegram_token)
+# Bitly
+shortener = bitlyshortener.Shortener(tokens=[bitly_token], max_cache_size=256)
+
+# Telegram
+bot = Bot(token=telegram_bot_token)
+
 
 def cerca_offerte(keyword):
     try:
@@ -36,7 +53,7 @@ def cerca_offerte(keyword):
             keywords=keyword,
             search_index="All",
             item_count=int(item_count),
-            resources=resources
+            Resources=resources  # ✅ solo qui, R maiuscola
         )
         print(f"[INFO] '{keyword}': Amazon ha restituito {len(items)} risultati.")
         return items
@@ -44,38 +61,33 @@ def cerca_offerte(keyword):
         print(f"[ERRORE] ricerca '{keyword}': {e}")
         return []
 
-def filtra_offerte(items, keyword):
-    risultati = []
-    for item in items:
-        try:
-            titolo = item["ItemInfo"]["Title"]["DisplayValue"]
-            prezzo = item["Offers"]["Listings"][0]["Price"]["Amount"]
-            prezzo_vecchio = item["Offers"]["Listings"][0].get("SavingBasis", {}).get("Amount", prezzo)
-            sconto = round((prezzo_vecchio - prezzo) / prezzo_vecchio * 100) if prezzo_vecchio > prezzo else 0
 
+def estrai_sconto(item):
+    try:
+        prezzo_listino = item.offers.listings[0].saving_basis.price.value
+        prezzo_attuale = item.offers.listings[0].price.value
+        sconto = round((prezzo_listino - prezzo_attuale) / prezzo_listino * 100)
+        return sconto
+    except:
+        return 0
+
+
+def invia_telegram(messaggio):
+    bot.send_message(chat_id=telegram_chat_id, text=messaggio, parse_mode="HTML")
+
+
+def main():
+    for keyword in keywords:
+        items = cerca_offerte(keyword)
+        for item in items:
+            sconto = estrai_sconto(item)
             if sconto >= min_save:
-                url = item["DetailPageURL"]
-                short_url = shortener.shorten_urls([url])[0]
-                risultati.append(f"{titolo}\n💰 {prezzo}€ (-{sconto}%)\n🔗 {short_url}")
-                print(f"[OK] '{titolo}' - Prezzo: {prezzo}€, Sconto: {sconto}% ✅")
-            else:
-                print(f"[SCARTATO] '{titolo}' - Sconto: {sconto}% (< {min_save}%) ❌")
+                titolo = item.item_info.title.display_value
+                link = shortener.shorten_urls([item.detail_page_url])[0]
+                prezzo = item.offers.listings[0].price.display_amount
+                messaggio = f"<b>{titolo}</b>\nPrezzo: {prezzo}\nSconto: {sconto}%\n{link}"
+                invia_telegram(messaggio)
 
-        except Exception as err:
-            print(f"[ERRORE DATI] {err} - Oggetto: {item}")
-            continue
-
-    print(f"[INFO] '{keyword}': {len(risultati)} offerte valide su {len(items)} totali.")
-    return risultati
-
-def invia_telegram(messaggi):
-    for msg in messaggi:
-        bot.send_message(chat_id=telegram_chat_id, text=msg)
 
 if __name__ == "__main__":
-    for kw in keywords:
-        kw = kw.strip()
-        items = cerca_offerte(kw)
-        offerte = filtra_offerte(items, kw)
-        if offerte:
-            invia_telegram(offerte)
+    main()
