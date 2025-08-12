@@ -1,23 +1,21 @@
-# .github/workflows/run.yml
-name: Run Amazon-Telegram Bot
+name: Run Amazon Bot
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'  # ogni ora (modifica a piacere)
+    - cron: "0 8 * * *"  # ogni giorno alle 08:00 UTC (modifica se vuoi)
 
 jobs:
-  run-bot:
+  run:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -25,12 +23,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run bot
-        run: python run-bot.py
         env:
-          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
-          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
-          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_DISCOUNT: ${{ secrets.MIN_DISCOUNT }}
+          AMAZON_COUNTRY: "it"
+        run: |
+          python run.py
