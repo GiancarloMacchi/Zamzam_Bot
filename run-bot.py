@@ -1,3 +1,4 @@
+# run-bot.py
 from main import esegui_bot
 
 if __name__ == "__main__":
