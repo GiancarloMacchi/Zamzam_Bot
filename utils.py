@@ -3,11 +3,15 @@ from amazon_api import get_amazon_client
 def search_amazon_products(keywords, item_count=10):
     """
     Cerca prodotti su Amazon usando le API ufficiali.
+    Restituisce una lista di prodotti o una lista vuota in caso di errore.
     """
     amazon = get_amazon_client()
     try:
-        products = amazon.search_items(keywords=keywords, item_count=item_count)
-        return products
+        result = amazon.search_items(keywords=keywords, item_count=item_count)
+        if hasattr(result, "items") and result.items:
+            return result.items
+        else:
+            return []
     except Exception as e:
         print(f"Errore durante la ricerca prodotti: {e}")
         return []
