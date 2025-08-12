@@ -1,35 +1,39 @@
 import os
-from telegram import Bot
-from telegram.constants import ParseMode
+import requests
+from dotenv import load_dotenv
+
+# Carica variabili d'ambiente
+load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def get_telegram_client():
+
+def invia_messaggio(testo):
     """
-    Restituisce il client Telegram Bot.
+    Invia un messaggio di testo al canale/chat Telegram.
+    :param testo: Stringa del messaggio.
     """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        raise ValueError("Token o Chat ID di Telegram mancanti nei secrets.")
-    return Bot(token=TELEGRAM_BOT_TOKEN)
+        print("❌ TOKEN o CHAT_ID mancanti. Controlla il file .env")
+        return False
 
-def send_telegram_message(bot, message):
-    """
-    Invia un messaggio di testo su Telegram.
-    """
-    bot.send_message(
-        chat_id=TELEGRAM_CHAT_ID,
-        text=message,
-        parse_mode=ParseMode.HTML
-    )
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": testo,
+        "disable_web_page_preview": False,
+        "parse_mode": "HTML"
+    }
 
-def send_telegram_photo(bot, photo_url, caption):
-    """
-    Invia una foto con didascalia su Telegram.
-    """
-    bot.send_photo(
-        chat_id=TELEGRAM_CHAT_ID,
-        photo=photo_url,
-        caption=caption,
-        parse_mode=ParseMode.HTML
-    )
+    try:
+        response = requests.post(url, data=payload)
+        if response.status_code == 200:
+            print("📨 Messaggio inviato con successo")
+            return True
+        else:
+            print(f"❌ Errore Telegram: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ Errore nell'invio del messaggio Telegram: {e}")
+        return False
