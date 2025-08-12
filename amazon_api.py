@@ -1,35 +1,46 @@
 import os
+from amazon_paapi import AmazonAPI
 from dotenv import load_dotenv
-from amazon_paapi.amazon_api import AmazonAPI  # ✅ Import corretto
-from amazon_paapi.models import Condition, SearchIndex
 
 load_dotenv()
 
-ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+# ✅ Prende i dati dai secrets/env
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")  # Default Italia
 
-amazon = AmazonAPI(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+# ✅ Inizializza API
+amazon = AmazonAPI(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
 
-
-def cerca_prodotti(keyword, item_count=5):
+def cerca_prodotti(keywords, item_count=10):
+    """Cerca prodotti su Amazon usando le API ufficiali."""
     try:
-        items = amazon.search_items(
-            keywords=keyword,
-            search_index=SearchIndex.ALL,
-            item_count=item_count,
-            condition=Condition.NEW,
+        results = amazon.search_items(
+            keywords=keywords,
+            item_count=item_count
         )
-
-        risultati = []
-        for item in items:
-            risultati.append({
-                "titolo": item.item_info.title.display_value if item.item_info and item.item_info.title else "N/A",
-                "prezzo": item.offers.listings[0].price.display_amount if item.offers and item.offers.listings else "N/D",
-                "url": item.detail_page_url,
-            })
-        return risultati
+        prodotti = []
+        for item in results.items:
+            try:
+                prodotti.append({
+                    "asin": item.asin,
+                    "titolo": item.item_info.title.display_value if item.item_info and item.item_info.title else "Senza titolo",
+                    "prezzo": (
+                        item.offers.listings[0].price.display_amount
+                        if item.offers and item.offers.listings and item.offers.listings[0].price
+                        else "N/A"
+                    ),
+                    "link": item.detail_page_url
+                })
+            except Exception as e:
+                print(f"Errore parsing item: {e}")
+        return prodotti
     except Exception as e:
-        print(f"Errore nella ricerca Amazon: {e}")
+        print(f"Errore ricerca prodotti: {e}")
         return []
