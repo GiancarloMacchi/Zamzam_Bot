@@ -10,7 +10,7 @@ def get_telegram_client():
     Restituisce il client Telegram Bot.
     """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        raise ValueError("Token o Chat ID di Telegram non impostati nei secrets.")
+        raise ValueError("Token o Chat ID di Telegram mancanti nei secrets.")
     return Bot(token=TELEGRAM_BOT_TOKEN)
 
 def send_telegram_message(bot, message):
