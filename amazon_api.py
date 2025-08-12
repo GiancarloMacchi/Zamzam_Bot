@@ -14,8 +14,8 @@ amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, A
 
 def cerca_prodotti(keywords, item_count=5, min_save=0):
     """
-    Cerca prodotti su Amazon usando la libreria python-amazon-paapi.
-    Ritorna solo quelli che hanno almeno la percentuale di sconto indicata.
+    Cerca prodotti su Amazon usando python-amazon-paapi.
+    Mostra anche quelli senza list_price per debug.
     """
     try:
         results = amazon.search_products(
@@ -32,16 +32,18 @@ def cerca_prodotti(keywords, item_count=5, min_save=0):
         prezzo_listino = prodotto.list_price or 0
         prezzo_offerta = prodotto.price or 0
 
+        # Calcolo sconto solo se c'è listino
         if prezzo_listino and prezzo_offerta:
             sconto = round((prezzo_listino - prezzo_offerta) / prezzo_listino * 100, 2)
         else:
-            sconto = 0
+            sconto = 0  # Nessun dato di sconto disponibile
 
-        if sconto >= min_save:
+        # Mostra anche prodotti senza sconto se min_save = 0
+        if sconto >= min_save or min_save == 0:
             prodotti_filtrati.append({
                 "titolo": prodotto.title,
-                "prezzo": prezzo_offerta,
-                "prezzo_listino": prezzo_listino,
+                "prezzo": prezzo_offerta if prezzo_offerta else "N/D",
+                "prezzo_listino": prezzo_listino if prezzo_listino else "N/D",
                 "sconto": sconto,
                 "link": prodotto.detail_page_url
             })
