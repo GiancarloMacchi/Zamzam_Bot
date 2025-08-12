@@ -17,14 +17,8 @@ AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 def get_amazon_client():
 
     return AmazonApi(
-
         AMAZON_ACCESS_KEY,
-
         AMAZON_SECRET_KEY,
-
         AMAZON_ASSOCIATE_TAG,
-
-        AMAZON_COUNTRY
-
-    )
+        AMAZON_COUNTRY)
 
