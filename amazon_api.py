@@ -9,46 +9,46 @@ AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+amazon = AmazonApi(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
 
-
-def cerca_prodotti(keywords, item_count=5, min_save=0):
-    """
-    Cerca prodotti su Amazon usando python-amazon-paapi.
-    Filtra prodotti senza immagine e sotto la soglia di sconto.
-    """
+def cerca_prodotti(keyword, item_count=5, min_save=0):
+    risultati = []
     try:
-        results = amazon.search_products(
-            keywords=keywords,
+        prodotti = amazon.search_items(
+            keywords=keyword,
+            search_index="All",
             item_count=item_count
         )
+
+        for item in prodotti.items:
+            titolo = getattr(item.item_info.title, 'display_value', None)
+            prezzo = getattr(item.offers.listings[0].price, 'amount', None) if item.offers else None
+            sconto = None
+            descrizione = getattr(item.item_info.by_line_info, 'manufacturer', None)
+
+            if item.offers and hasattr(item.offers.listings[0], 'saving_basis'):
+                base = getattr(item.offers.listings[0].saving_basis.price, 'amount', None)
+                if base and prezzo:
+                    sconto = round((base - prezzo) / base * 100)
+
+            if sconto is not None and sconto < min_save:
+                continue
+
+            if titolo and prezzo:
+                risultati.append({
+                    "titolo": titolo,
+                    "prezzo": prezzo,
+                    "sconto": sconto if sconto is not None else 0,
+                    "link": item.detail_page_url,
+                    "descrizione": descrizione if descrizione else ""
+                })
+
     except Exception as e:
-        print(f"Errore durante la ricerca: {e}")
-        return []
+        print(f"Errore nella ricerca prodotti: {e}")
 
-    prodotti_filtrati = []
-
-    for prodotto in results:
-        # Scarta se non ha immagine
-        if not prodotto.images or not prodotto.images[0].url:
-            continue
-
-        prezzo_listino = prodotto.list_price or 0
-        prezzo_offerta = prodotto.price or 0
-
-        if prezzo_listino and prezzo_offerta:
-            sconto = round((prezzo_listino - prezzo_offerta) / prezzo_listino * 100, 2)
-        else:
-            sconto = 0
-
-        if sconto >= min_save or min_save == 0:
-            prodotti_filtrati.append({
-                "titolo": prodotto.title,
-                "prezzo": prezzo_offerta if prezzo_offerta else "N/D",
-                "prezzo_listino": prezzo_listino if prezzo_listino else "N/D",
-                "sconto": sconto,
-                "link": prodotto.detail_page_url,
-                "immagine": prodotto.images[0].url if prodotto.images else None
-            })
-
-    return prodotti_filtrati
+    return risultati
