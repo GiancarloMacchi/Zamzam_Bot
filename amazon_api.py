@@ -65,3 +65,4 @@ def search_amazon_products(keyword, **kwargs):
 
     # Non riconosciuto -> ritorniamo singleton
     return [result]
+    
