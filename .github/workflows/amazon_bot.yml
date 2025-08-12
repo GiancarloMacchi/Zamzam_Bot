@@ -2,8 +2,8 @@ name: Amazon Bot
 
 on:
   schedule:
-    - cron: "0 8,12,16,20 * * *"  # 4 volte al giorno: 8:00, 12:00, 16:00, 20:00
-  workflow_dispatch:  # permette avvio manuale
+    - cron: "0 8,12,16,20 * * *"  # 4 volte al giorno
+  workflow_dispatch:
 
 jobs:
   run-bot:
