@@ -2,76 +2,96 @@ import os
 import logging
 from amazon_paapi import AmazonApi
 from telegram import Bot
-from datetime import datetime
 
-# === CONFIG ===
+# === CONFIGURAZIONE LOG ===
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(levelname)s] %(message)s'
+)
+
+# === LETTURA VARIABILI D'AMBIENTE ===
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", "10"))
-MIN_SAVE = int(os.getenv("MIN_SAVE", "10"))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
 
-# Parole whitelist
-WHITELIST_KEYWORDS = [
-    "infanzia", "mamma", "bimbo", "bambino", "bambina",
-    "papà", "libri bambini", "vestiti bambino", "premaman",
-    "scuola", "asilo", "asilo nido", "colori", "pastelli",
-    "regalo", "piscina", "costume", "ciabatte",
-    "ragazzo", "ragazza", "adolescente"
+# === LISTA KEYWORDS ===
+KEYWORDS = [
+    "infanzia", "mamma", "bimbo", "bambino", "bambina", "papà",
+    "libri bambini", "vestiti bambino", "premaman", "scuola",
+    "asilo", "asilo nido", "colori", "pastelli", "regalo",
+    "piscina", "costume", "ciabatte", "ragazzo", "ragazza", "adolescente"
 ]
 
-# === LOGGING ===
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(message)s"
+# === WHITELIST IN ITALIANO ===
+WHITELIST = [
+    "bambino", "bambina", "bimbo", "bimba", "neonato", "neonata",
+    "mamma", "papà", "famiglia", "scuola", "asilo", "infanzia",
+    "giocattolo", "gioco", "colori", "pastelli", "premaman",
+    "piscina", "costume", "ciabatte", "libro", "regalo", "adolescente"
+]
+
+# === AVVIO BOT ===
+logging.info(f"🚀 Avvio bot Amazon - Partner tag: {AMAZON_ASSOCIATE_TAG}")
+
+amazon = AmazonApi(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
 )
 
-def main():
-    logging.info(f"🚀 Avvio bot Amazon - Partner tag: {AMAZON_ASSOCIATE_TAG}")
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-    amazon = AmazonApi(
-        AMAZON_ACCESS_KEY,
-        AMAZON_SECRET_KEY,
-        AMAZON_ASSOCIATE_TAG,
-        AMAZON_COUNTRY
-    )
-
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
-
-    for kw in WHITELIST_KEYWORDS:
-        logging.info(f"🔍 Ricerca per: {kw}")
-        try:
-            results = amazon.search_items(
-                keywords=kw,
-                item_count=ITEM_COUNT  # ✅ Passato SOLO una volta
-            )
-            found_count = len(results.items) if results and results.items else 0
-            logging.info(f"📦 {found_count} risultati trovati per '{kw}'")
-        except Exception as e:
-            logging.error(f"[ERRORE Amazon] ricerca '{kw}': {e}")
+for kw in KEYWORDS:
+    logging.info(f"🔍 Ricerca per: {kw}")
+    try:
+        results = amazon.search_items(
+            keywords=kw,
+            SearchIndex="All",
+            ItemCount=ITEM_COUNT
+        )
+        
+        if not results:
+            logging.warning(f"Nessun risultato per '{kw}'")
             continue
-
-        for item in results.items:
+        
+        for item in results:
             try:
-                title = item.item_info.title.display_value
-                price_info = item.offers.listings[0].price
-                saving_info = item.offers.listings[0].saving_basis
+                price, currency = item.price_and_currency if item.price_and_currency else (None, None)
+                if not price:
+                    logging.debug(f"⏭ Nessun prezzo per '{item.title}'")
+                    continue
 
-                if saving_info and saving_info.amount > 0:
-                    save_percent = (saving_info.amount / saving_info.value) * 100
-                    if save_percent >= MIN_SAVE:
-                        msg = f"💥 {kw.capitalize()} in offerta!\n" \
-                              f"{title}\n" \
-                              f"💶 {price_info.display_amount} (-{int(save_percent)}%)\n" \
-                              f"🔗 {item.detail_page_url}"
-                        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
+                title_lower = item.title.lower()
+
+                # Controllo whitelist
+                if not any(word in title_lower for word in WHITELIST):
+                    logging.debug(f"⏭ Escluso per whitelist: {item.title}")
+                    continue
+
+                logging.info(f"📦 Prodotto trovato: {item.title}")
+                logging.info(f"💰 Prezzo: {price} {currency}")
+                logging.info(f"🔗 Link: {item.detail_page_url}")
+
+                # Messaggio Telegram
+                message = (
+                    f"😎 Offerta Amazon!\n\n"
+                    f"📦 {item.title}\n"
+                    f"💰 {price} {currency}\n"
+                    f"🔗 {item.detail_page_url}"
+                )
+                bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+
             except Exception as e:
-                logging.error(f"[ERRORE parsing] {e}")
+                logging.error(f"[ERRORE Invio Telegram] {e}")
 
-    logging.info("✅ Bot completato")
+    except Exception as e:
+        logging.error(f"[ERRORE Amazon] ricerca '{kw}': {e}")
 
-if __name__ == "__main__":
-    main()
+logging.info("✅ Bot completato")
