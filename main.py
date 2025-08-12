@@ -1,14 +1,14 @@
 import os
 import random
 import requests
-from bs4 import BeautifulSoup
 from bitlyshortener import Shortener
 from dotenv import load_dotenv
+from amazon_paapi import AmazonApi
 
-# Carica variabili d'ambiente (funziona sia in locale che con GitHub Secrets)
+# Carica variabili d'ambiente
 load_dotenv()
 
-# Legge le variabili d'ambiente dai Repository secrets
+# Secrets GitHub
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
@@ -20,7 +20,7 @@ MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Frasi simpatiche per categoria
+# Frasi per categorie
 CATEGORY_MESSAGES = {
     "infanzia": [
         "Perfetto per il tuo piccolo tesoro! 👶",
@@ -90,7 +90,7 @@ CATEGORY_MESSAGES = {
     ]
 }
 
-# Frasi generiche se nessuna categoria è trovata
+# Messaggi generici se nessuna categoria trovata
 GENERIC_MESSAGES = [
     "Un'offerta da non perdere! 🔥",
     "Solo per veri intenditori 💡",
@@ -99,7 +99,6 @@ GENERIC_MESSAGES = [
 ]
 
 def get_category_message(title):
-    """Trova un messaggio simpatico in base alla categoria nel titolo"""
     title_lower = title.lower()
     for category, messages in CATEGORY_MESSAGES.items():
         if category in title_lower:
@@ -107,29 +106,43 @@ def get_category_message(title):
     return random.choice(GENERIC_MESSAGES)
 
 def shorten_url(url):
-    """Accorcia un link con Bitly"""
     if not BITLY_TOKEN:
         return url
     shortener = Shortener(tokens=[BITLY_TOKEN], max_cache_size=256)
     return shortener.shorten_urls([url])[0]
 
 def send_telegram_message(text):
-    """Invia un messaggio su Telegram"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️ Token Telegram o Chat ID mancanti.")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": False}
     requests.post(url, data=payload)
 
-def main():
-    # Qui andrai a inserire il codice che recupera le offerte da Amazon
-    # Esempio placeholder per test
-    products = [
-        {"title": "Giocattolo educativo per bambini", "url": "https://www.amazon.it/dp/example1"},
-        {"title": "Libro illustrato per l'infanzia", "url": "https://www.amazon.it/dp/example2"}
-    ]
+def fetch_amazon_deals():
+    api = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+    keywords_list = [kw.strip() for kw in KEYWORDS.split(",") if kw.strip()]
+    products = []
+    for kw in keywords_list:
+        try:
+            results = api.search_items(keywords=kw, item_count=ITEM_COUNT, resources=["Images.Primary.Medium", "ItemInfo.Title", "Offers.Listings.Price", "Offers.Listings.SavingBasis"])
+            for item in results:
+                title = item.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "")
+                url = item.get("DetailPageURL", "")
+                offers = item.get("Offers", {}).get("Listings", [{}])
+                if offers:
+                    price_info = offers[0].get("Price", {}).get("Amount", None)
+                    saving_basis = offers[0].get("SavingBasis", {}).get("Amount", None)
+                    if saving_basis and price_info:
+                        discount = round((saving_basis - price_info) / saving_basis * 100, 2)
+                        if discount >= MIN_SAVE:
+                            products.append({"title": title, "url": url})
+        except Exception as e:
+            print(f"Errore ricerca '{kw}': {e}")
+    return products
 
+def main():
+    products = fetch_amazon_deals()
     for product in products:
         short_url = shorten_url(product["url"])
         message = get_category_message(product["title"])
