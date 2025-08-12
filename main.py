@@ -3,30 +3,42 @@ from dotenv import load_dotenv
 from amazon_api import cerca_prodotti
 from telegram_api import invia_messaggio
 
-# Carica le variabili d'ambiente
+# Carica variabili da .env
 load_dotenv()
 
-KEYWORDS = os.getenv("KEYWORDS")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
+KEYWORDS = os.getenv("KEYWORDS", "")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT") or 5)
+MIN_SAVE = int(os.getenv("MIN_SAVE") or 20)  # Sconto minimo percentuale
+RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
+
+def formatta_prodotto(prodotto):
+    """Crea il testo formattato per Telegram"""
+    titolo = prodotto.get("titolo", "Senza titolo")
+    prezzo = prodotto.get("prezzo", "Prezzo non disponibile")
+    url = prodotto.get("url", "")
+    return f"<b>{titolo}</b>\n💰 {prezzo}\n🔗 {url}"
 
 def main():
-    print("🔍 Avvio ricerca prodotti Amazon...")
-    prodotti = cerca_prodotti(KEYWORDS, item_count=ITEM_COUNT, min_save=MIN_SAVE)
-
-    if not prodotti:
-        print("❌ Nessun prodotto trovato.")
+    if not KEYWORDS:
+        print("❌ Nessuna parola chiave trovata in KEYWORDS. Controlla il file .env")
         return
 
-    print(f"✅ Trovati {len(prodotti)} prodotti. Invio su Telegram...")
-    for p in prodotti:
-        messaggio = f"{p['titolo']}\n💰 Prezzo: {p['prezzo']}€"
-        if p["risparmio"]:
-            messaggio += f" (-{p['risparmio']}%)"
-        messaggio += f"\n🔗 {p['link']}"
-        invia_messaggio(messaggio)
+    print(f"🔍 Ricerca prodotti per parole chiave: {KEYWORDS}")
+    prodotti = cerca_prodotti(KEYWORDS, item_count=ITEM_COUNT)
 
-    print("📤 Invio completato.")
+    if not prodotti:
+        print("⚠️ Nessun prodotto trovato.")
+        return
+
+    for prodotto in prodotti:
+        testo = formatta_prodotto(prodotto)
+        invia_messaggio(testo)
+
+    print("✅ Ricerca completata.")
+
+    if RUN_ONCE:
+        print("🛑 Modalità RUN_ONCE attiva. Script terminato.")
+        return
 
 if __name__ == "__main__":
     main()
