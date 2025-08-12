@@ -1,46 +1,49 @@
 import os
-from amazon_paapi import AmazonAPI
+from amazon_paapi import AmazonApi
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ✅ Prende i dati dai secrets/env
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")  # Default Italia
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-# ✅ Inizializza API
-amazon = AmazonAPI(
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    AMAZON_COUNTRY
-)
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
 
-def cerca_prodotti(keywords, item_count=10):
-    """Cerca prodotti su Amazon usando le API ufficiali."""
+
+def cerca_prodotti(keywords, item_count=5, min_save=0):
+    """
+    Cerca prodotti su Amazon usando la libreria python-amazon-paapi.
+    Ritorna solo quelli che hanno almeno la percentuale di sconto indicata.
+    """
     try:
-        results = amazon.search_items(
+        results = amazon.search_products(
             keywords=keywords,
             item_count=item_count
         )
-        prodotti = []
-        for item in results.items:
-            try:
-                prodotti.append({
-                    "asin": item.asin,
-                    "titolo": item.item_info.title.display_value if item.item_info and item.item_info.title else "Senza titolo",
-                    "prezzo": (
-                        item.offers.listings[0].price.display_amount
-                        if item.offers and item.offers.listings and item.offers.listings[0].price
-                        else "N/A"
-                    ),
-                    "link": item.detail_page_url
-                })
-            except Exception as e:
-                print(f"Errore parsing item: {e}")
-        return prodotti
     except Exception as e:
-        print(f"Errore ricerca prodotti: {e}")
+        print(f"Errore durante la ricerca: {e}")
         return []
+
+    prodotti_filtrati = []
+
+    for prodotto in results:
+        prezzo_listino = prodotto.list_price or 0
+        prezzo_offerta = prodotto.price or 0
+
+        if prezzo_listino and prezzo_offerta:
+            sconto = round((prezzo_listino - prezzo_offerta) / prezzo_listino * 100, 2)
+        else:
+            sconto = 0
+
+        if sconto >= min_save:
+            prodotti_filtrati.append({
+                "titolo": prodotto.title,
+                "prezzo": prezzo_offerta,
+                "prezzo_listino": prezzo_listino,
+                "sconto": sconto,
+                "link": prodotto.detail_page_url
+            })
+
+    return prodotti_filtrati
