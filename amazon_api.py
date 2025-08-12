@@ -1,4 +1,4 @@
-from amazon_paapi import AmazonApi
+from paapi import AmazonApi
 import os
 
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
