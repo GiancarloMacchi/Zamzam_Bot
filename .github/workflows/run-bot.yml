@@ -1,4 +1,4 @@
-from main import main
+from main import esegui_bot
 
 if __name__ == "__main__":
-    main()
+    esegui_bot()
