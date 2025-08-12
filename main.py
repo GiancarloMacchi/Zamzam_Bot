@@ -1,88 +1,96 @@
 import os
 import logging
-from amazon_paapi import AmazonApi
-from amazon_paapi.sdk.models.search_items_request import SearchItemsRequest
 from dotenv import load_dotenv
 import requests
-from bs4 import BeautifulSoup
 import bitlyshortener
-from telegram import Bot
-from datetime import datetime
+from amazon_paapi import AmazonApi
 
-# Carica variabili d'ambiente
-load_dotenv()
+# =========================
+# CONFIGURAZIONE LOGGING
+# =========================
+logging.basicConfig(
+    format='[%(levelname)s] %(message)s',
+    level=logging.INFO
+)
 
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+# =========================
+# CARICAMENTO VARIABILI
+# =========================
+load_dotenv()  # utile in locale, su GitHub Actions non serve ma non disturba
 
-# Variabili ambiente
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-BITLY_TOKEN = os.getenv("BITLY_TOKEN")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-KEYWORDS = os.getenv("KEYWORDS", "infanzia,mamma,bimbo").split(",")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 4))
-MIN_SAVE = float(os.getenv("MIN_SAVE", 10))
-
-# Inizializza API Amazon
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-
-# Bitly
-shortener = bitlyshortener.Shortener(tokens=[BITLY_TOKEN])
-
-# Telegram Bot
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
-
-# Lista risorse Amazon
-RESOURCES = [
-    "ItemInfo.Title",
-    "Offers.Listings.Price",
-    "Offers.Listings.SavingBasis",
-    "Offers.Listings.PercentageSavings",
-    "Images.Primary.Medium",
-    "DetailPageURL"
+required_vars = [
+    "AMAZON_ACCESS_KEY",
+    "AMAZON_SECRET_KEY",
+    "AMAZON_ASSOCIATE_TAG",
+    "AMAZON_COUNTRY",
+    "BITLY_TOKEN",
+    "ITEM_COUNT",
+    "KEYWORDS",
+    "MIN_SAVE",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID"
 ]
 
-logging.info(f"🚀 Avvio bot Amazon alle {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    raise EnvironmentError(f"❌ Variabili d'ambiente mancanti: {', '.join(missing_vars)}")
 
-for kw in KEYWORDS:
+logging.info(f"🚀 Avvio bot Amazon - Partner tag: {os.getenv('AMAZON_ASSOCIATE_TAG')}")
+
+# =========================
+# FUNZIONI DI SUPPORTO
+# =========================
+def shorten_url(url):
+    tokens = [os.getenv("BITLY_TOKEN")]
+    shortener = bitlyshortener.Shortener(tokens=tokens)
+    return shortener.shorten_urls([url])[0]
+
+def send_telegram_message(text):
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": False
+    }
+    resp = requests.post(url, data=payload)
+    if resp.status_code != 200:
+        logging.error(f"Errore invio Telegram: {resp.text}")
+
+# =========================
+# AMAZON API
+# =========================
+amazon = AmazonApi(
+    os.getenv("AMAZON_ACCESS_KEY"),
+    os.getenv("AMAZON_SECRET_KEY"),
+    os.getenv("AMAZON_ASSOCIATE_TAG"),
+    os.getenv("AMAZON_COUNTRY")
+)
+
+keywords = [kw.strip() for kw in os.getenv("KEYWORDS").split(",")]
+item_count = int(os.getenv("ITEM_COUNT"))
+min_save = float(os.getenv("MIN_SAVE"))
+
+for kw in keywords:
     logging.info(f"🔍 Ricerca per: {kw}")
     try:
-        # Creo la request senza duplicare resources
-        request = SearchItemsRequest(
-            keywords=kw,
-            resources=RESOURCES,
-            item_count=ITEM_COUNT
-        )
-
-        response = amazon.search_items(request)
-
-        if not hasattr(response, "search_result") or not response.search_result.items:
-            logging.info(f"Nessuna offerta valida per '{kw}'.")
-            continue
-
-        for item in response.search_result.items:
+        results = amazon.search_items(keywords=kw, item_count=item_count)
+        for item in results:
             try:
-                price = item.offers.listings[0].price.amount
-                saving_basis = item.offers.listings[0].saving_basis.amount if item.offers.listings[0].saving_basis else None
-                percentage = item.offers.listings[0].percentage_savings if hasattr(item.offers.listings[0], "percentage_savings") else None
+                title = item.title
+                url = shorten_url(item.detail_page_url)
+                price = item.list_price and item.list_price.amount
+                savings = item.saving_amount and item.saving_amount.amount
 
-                if percentage is None or percentage < MIN_SAVE:
-                    continue
-
-                url = shortener.shorten_urls([item.detail_page_url])[0]
-                title = item.item_info.title.display_value
-                image = item.images.primary.medium.url
-
-                message = f"🎯 <b>{title}</b>\n💰 {price}€\n💸 Sconto: {percentage}%\n🔗 {url}"
-
-                bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=image, caption=message, parse_mode="HTML")
-
+                if price and savings:
+                    discount_percent = (savings / (price + savings)) * 100
+                    if discount_percent >= min_save:
+                        msg = f"<b>{title}</b>\n💰 Prezzo: {price}€\n💸 Sconto: {discount_percent:.0f}%\n🔗 {url}"
+                        send_telegram_message(msg)
             except Exception as e:
-                logging.error(f"Errore elaborando offerta: {e}")
-
+                logging.error(f"Errore item: {e}")
     except Exception as e:
         logging.error(f"[ERRORE Amazon] ricerca '{kw}': {e}")
 
