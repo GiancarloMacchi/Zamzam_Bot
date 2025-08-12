@@ -1,89 +1,61 @@
 import os
-import sys
-import requests
-from bs4 import BeautifulSoup
-from dotenv import load_dotenv
+from amazon_paapi import AmazonApi
 from bitlyshortener import Shortener
-from python_amazon_paapi import AmazonApi
 from telegram import Bot
+from dotenv import load_dotenv
 
-# Carica variabili d'ambiente dal file .env (utile per debug locale)
+# Carica variabili da .env o Repository secrets di GitHub
 load_dotenv()
 
-# 🔹 Lettura secrets da GitHub Actions (o .env locale)
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
 BITLY_TOKEN = os.getenv("BITLY_TOKEN")
 ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-KEYWORDS = os.getenv("KEYWORDS", "")
-MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
+KEYWORDS = os.getenv("KEYWORDS", "iPhone")
+MIN_SAVE = float(os.getenv("MIN_SAVE", 0))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# 🔹 Controllo secrets essenziali
-required_vars = [
-    "AMAZON_ACCESS_KEY",
-    "AMAZON_SECRET_KEY",
-    "AMAZON_ASSOCIATE_TAG",
-    "BITLY_TOKEN",
-    "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_CHAT_ID",
-    "KEYWORDS"
-]
+# Inizializza Amazon API
+amazon = AmazonApi(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
 
-for var in required_vars:
-    if not globals()[var]:
-        sys.exit(f"❌ ERRORE: La variabile '{var}' non è impostata nei Repository secrets!")
+# Inizializza Bitly
+shortener = Shortener(tokens=[BITLY_TOKEN], max_cache_size=256)
 
-# 🔹 Inizializza API Amazon
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-
-# 🔹 Inizializza Bitly
-shortener = Shortener(tokens=[BITLY_TOKEN], max_cache_size=8192)
-
-# 🔹 Inizializza Telegram Bot
+# Inizializza Bot Telegram
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-print(f"🔍 Avvio ricerca prodotti su Amazon...\n   Keywords: {KEYWORDS}\n   Numero massimo risultati: {ITEM_COUNT}\n   Sconto minimo: {MIN_SAVE}%\n")
+def cerca_offerte():
+    print(f"🔍 Ricerca: {KEYWORDS}")
+    products = amazon.search_items(
+        keywords=KEYWORDS,
+        item_count=ITEM_COUNT
+    )
 
-try:
-    results = amazon.search_items(keywords=KEYWORDS, item_count=ITEM_COUNT)
-except Exception as e:
-    sys.exit(f"❌ Errore durante la ricerca su Amazon: {e}")
+    for product in products:
+        try:
+            title = product.item_info.title.display_value
+            price = float(product.offers.listings[0].price.amount)
+            saving = product.offers.listings[0].price.savings.amount \
+                if product.offers.listings[0].price.savings else 0
+            saving_percentage = (saving / (price + saving) * 100) if saving > 0 else 0
+            url = product.detail_page_url
 
-if not results or not getattr(results, "items", []):
-    sys.exit("❌ Nessun prodotto trovato dalla Amazon API.")
+            # Filtra in base al MIN_SAVE
+            if saving_percentage >= MIN_SAVE:
+                short_url = shortener.shorten_urls([url])[0]
+                messaggio = f"📦 {title}\n💰 Prezzo: {price}€\n💸 Sconto: {saving_percentage:.1f}%\n🔗 {short_url}"
+                bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=messaggio)
 
-products = results.items
-filtered_products = []
+        except Exception as e:
+            print(f"Errore nel prodotto: {e}")
 
-for item in products:
-    try:
-        title = item.item_info.title.display_value
-        url = item.detail_page_url
-        price = float(item.offers.listings[0].price.amount)
-        savings = item.offers.listings[0].saving_amount
-        discount = 0
-        if savings:
-            discount = (savings / (price + savings)) * 100
-
-        if discount >= MIN_SAVE:
-            short_url = shortener.shorten_urls([url])[0]
-            filtered_products.append(f"{title} - {discount:.0f}% OFF - {short_url}")
-
-    except Exception as e:
-        print(f"⚠️ Errore su un prodotto: {e}")
-
-if not filtered_products:
-    sys.exit("❌ Nessun prodotto soddisfa i criteri di sconto.")
-
-# 🔹 Invia messaggi su Telegram
-for message in filtered_products:
-    try:
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except Exception as e:
-        print(f"⚠️ Errore invio Telegram: {e}")
-
-print("✅ Offerte inviate con successo!")
+if __name__ == "__main__":
+    cerca_offerte()
