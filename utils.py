@@ -1,6 +1,6 @@
 import os
 import logging
-from amazon_paapi import AmazonAPI
+from amazon_paapi import AmazonApi
 import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
