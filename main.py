@@ -1,100 +1,89 @@
 import os
-import logging
-from dotenv import load_dotenv
-from amazon_paapi import AmazonApi
-from bitlyshortener import Shortener
-from telegram import Bot
+import sys
+import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from bitlyshortener import Shortener
+from python_amazon_paapi import AmazonApi
+from telegram import Bot
 
-# Carica variabili da .env
+# Carica variabili d'ambiente dal file .env (utile per debug locale)
 load_dotenv()
 
-# Imposta logging
-logging.basicConfig(level=logging.INFO, format='%(message)s')
-
-# Credenziali Amazon e Telegram
+# 🔹 Lettura secrets da GitHub Actions (o .env locale)
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-
 BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+KEYWORDS = os.getenv("KEYWORDS", "")
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-KEYWORDS = os.getenv("KEYWORDS", "")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
-RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
+# 🔹 Controllo secrets essenziali
+required_vars = [
+    "AMAZON_ACCESS_KEY",
+    "AMAZON_SECRET_KEY",
+    "AMAZON_ASSOCIATE_TAG",
+    "BITLY_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+    "KEYWORDS"
+]
 
-# Inizializza API
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, country=AMAZON_COUNTRY)
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+for var in required_vars:
+    if not globals()[var]:
+        sys.exit(f"❌ ERRORE: La variabile '{var}' non è impostata nei Repository secrets!")
+
+# 🔹 Inizializza API Amazon
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+
+# 🔹 Inizializza Bitly
 shortener = Shortener(tokens=[BITLY_TOKEN], max_cache_size=8192)
 
-def cerca_prodotti():
-    logging.info("🔍 Avvio ricerca prodotti su Amazon...")
-    logging.info(f"   Keywords: {KEYWORDS}")
-    logging.info(f"   Numero massimo risultati: {ITEM_COUNT}")
-    logging.info(f"   Sconto minimo: {MIN_SAVE}%\n")
+# 🔹 Inizializza Telegram Bot
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
+print(f"🔍 Avvio ricerca prodotti su Amazon...\n   Keywords: {KEYWORDS}\n   Numero massimo risultati: {ITEM_COUNT}\n   Sconto minimo: {MIN_SAVE}%\n")
+
+try:
+    results = amazon.search_items(keywords=KEYWORDS, item_count=ITEM_COUNT)
+except Exception as e:
+    sys.exit(f"❌ Errore durante la ricerca su Amazon: {e}")
+
+if not results or not getattr(results, "items", []):
+    sys.exit("❌ Nessun prodotto trovato dalla Amazon API.")
+
+products = results.items
+filtered_products = []
+
+for item in products:
     try:
-        search_result = amazon.search_items(
-            keywords=KEYWORDS,
-            item_count=ITEM_COUNT
-        )
+        title = item.item_info.title.display_value
+        url = item.detail_page_url
+        price = float(item.offers.listings[0].price.amount)
+        savings = item.offers.listings[0].saving_amount
+        discount = 0
+        if savings:
+            discount = (savings / (price + savings)) * 100
+
+        if discount >= MIN_SAVE:
+            short_url = shortener.shorten_urls([url])[0]
+            filtered_products.append(f"{title} - {discount:.0f}% OFF - {short_url}")
+
     except Exception as e:
-        logging.error(f"❌ Errore durante la ricerca: {e}")
-        return []
+        print(f"⚠️ Errore su un prodotto: {e}")
 
-    if not hasattr(search_result, "items") or not search_result.items:
-        logging.warning("⚠ Nessun prodotto trovato.")
-        return []
+if not filtered_products:
+    sys.exit("❌ Nessun prodotto soddisfa i criteri di sconto.")
 
-    prodotti = []
-    logging.info("=== DEBUG: Prodotti restituiti da Amazon API ===")
+# 🔹 Invia messaggi su Telegram
+for message in filtered_products:
+    try:
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    except Exception as e:
+        print(f"⚠️ Errore invio Telegram: {e}")
 
-    for item in search_result.items:
-        try:
-            asin = item.asin
-            titolo = item.item_info.title.display_value if item.item_info and item.item_info.title else "Senza titolo"
-            link = item.detail_page_url
-            prezzo_offerta = item.offers.listings[0].price.amount if item.offers and item.offers.listings else None
-            prezzo_vecchio = item.offers.listings[0].price.savings.amount if item.offers and item.offers.listings and item.offers.listings[0].price.savings else None
-            percentuale_sconto = item.offers.listings[0].price.savings.percentage if item.offers and item.offers.listings and item.offers.listings[0].price.savings else 0
-
-            logging.info(f"- {titolo} | ASIN: {asin} | Sconto: {percentuale_sconto}%")
-
-            if percentuale_sconto >= MIN_SAVE:
-                prodotti.append({
-                    "asin": asin,
-                    "titolo": titolo,
-                    "link": link,
-                    "prezzo_offerta": prezzo_offerta,
-                    "prezzo_vecchio": prezzo_vecchio,
-                    "sconto": percentuale_sconto
-                })
-
-        except Exception as e:
-            logging.error(f"Errore nel parsing di un prodotto: {e}")
-
-    logging.info("===============================================\n")
-    return prodotti
-
-def invia_telegram(prodotti):
-    for p in prodotti:
-        url_corto = shortener.shorten_urls([p["link"]])[0] if p["link"] else ""
-        messaggio = (
-            f"🔥 *{p['titolo']}*\n"
-            f"💰 Prezzo: {p['prezzo_offerta']} €\n"
-            f"💸 Sconto: {p['sconto']}%\n"
-            f"🔗 [Acquista ora]({url_corto})"
-        )
-        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=messaggio, parse_mode="Markdown")
-
-if __name__ == "__main__":
-    prodotti = cerca_prodotti()
-    if prodotti:
-        invia_telegram(prodotti)
-    else:
-        logging.info("Nessun prodotto da inviare.")
+print("✅ Offerte inviate con successo!")
