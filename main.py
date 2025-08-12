@@ -1,43 +1,40 @@
 import os
 from dotenv import load_dotenv
+from telegram import Bot
 from amazon_api import cerca_prodotti
-from telegram_api import invia_messaggio
+from bitlyshortener import Shortener
 
-# Carica variabili da .env
 load_dotenv()
 
-KEYWORDS = os.getenv("KEYWORDS", "")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT") or 5)
-MIN_SAVE = int(os.getenv("MIN_SAVE") or 20)  # Sconto minimo in %
+# ✅ Secrets da GitHub
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+KEYWORDS = os.getenv("KEYWORDS", "offerte")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
+MIN_SAVE = float(os.getenv("MIN_SAVE", 0))
 RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 
-def formatta_prodotto(prodotto):
-    """Crea un testo formattato per Telegram."""
-    titolo = prodotto.get("titolo", "Senza titolo")
-    prezzo = prodotto.get("prezzo", "Prezzo non disponibile")
-    url = prodotto.get("url", "")
-    return f"<b>{titolo}</b>\n💰 {prezzo}\n🔗 {url}"
+# ✅ Setup bot e Bitly
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+shortener = Shortener(tokens=[BITLY_TOKEN], max_cache_size=8192)
 
-def main():
-    if not KEYWORDS:
-        print("❌ Nessuna parola chiave trovata in KEYWORDS. Controlla il file .env")
-        return
+def formatta_prodotto(p):
+    short_url = shortener.shorten_urls([p["link"]])[0]
+    return f"📦 {p['titolo']}\n💰 Prezzo: {p['prezzo']}\n🔗 {short_url}"
 
-    print(f"🔍 Ricerca prodotti per parole chiave: {KEYWORDS}")
-    prodotti = cerca_prodotti(KEYWORDS, item_count=ITEM_COUNT)
-
+def invia_offerte():
+    prodotti = cerca_prodotti(KEYWORDS, ITEM_COUNT)
     if not prodotti:
-        print("⚠️ Nessun prodotto trovato.")
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text="Nessuna offerta trovata.")
         return
-
-    for prodotto in prodotti:
-        messaggio = formatta_prodotto(prodotto)
-        invia_messaggio(messaggio)
-
-    print("✅ Ricerca completata.")
-
-    if RUN_ONCE:
-        print("🛑 Modalità RUN_ONCE attiva. Script terminato.")
+    for p in prodotti:
+        try:
+            bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=formatta_prodotto(p))
+        except Exception as e:
+            print(f"Errore invio prodotto: {e}")
 
 if __name__ == "__main__":
-    main()
+    invia_offerte()
+    if not RUN_ONCE:
+        print("Modalità continua disabilitata in questa versione.")
