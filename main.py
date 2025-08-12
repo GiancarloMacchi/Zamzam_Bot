@@ -8,11 +8,11 @@ load_dotenv()
 
 KEYWORDS = os.getenv("KEYWORDS", "")
 ITEM_COUNT = int(os.getenv("ITEM_COUNT") or 5)
-MIN_SAVE = int(os.getenv("MIN_SAVE") or 20)  # Sconto minimo percentuale
+MIN_SAVE = int(os.getenv("MIN_SAVE") or 20)  # Sconto minimo in %
 RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 
 def formatta_prodotto(prodotto):
-    """Crea il testo formattato per Telegram"""
+    """Crea un testo formattato per Telegram."""
     titolo = prodotto.get("titolo", "Senza titolo")
     prezzo = prodotto.get("prezzo", "Prezzo non disponibile")
     url = prodotto.get("url", "")
@@ -31,14 +31,13 @@ def main():
         return
 
     for prodotto in prodotti:
-        testo = formatta_prodotto(prodotto)
-        invia_messaggio(testo)
+        messaggio = formatta_prodotto(prodotto)
+        invia_messaggio(messaggio)
 
     print("✅ Ricerca completata.")
 
     if RUN_ONCE:
         print("🛑 Modalità RUN_ONCE attiva. Script terminato.")
-        return
 
 if __name__ == "__main__":
     main()
