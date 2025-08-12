@@ -1,93 +1,112 @@
 import os
+import logging
 from amazon_paapi import AmazonApi
 from dotenv import load_dotenv
-import bitlyshortener
-import requests
-from bs4 import BeautifulSoup
-from telegram import Bot
+from bitlyshortener import Shortener
+import telegram
+from datetime import datetime
 
-# Carica variabili ambiente
+# Carica variabili d'ambiente
 load_dotenv()
 
-amazon_access_key = os.getenv("AMAZON_ACCESS_KEY")
-amazon_secret_key = os.getenv("AMAZON_SECRET_KEY")
-amazon_associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
-amazon_country = os.getenv("AMAZON_COUNTRY")
-bitly_token = os.getenv("BITLY_TOKEN")
-item_count = os.getenv("ITEM_COUNT")
-keywords = os.getenv("KEYWORDS").split(",")
-min_save = int(os.getenv("MIN_SAVE"))
-telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-
-# Amazon API
-amazon = AmazonApi(
-    amazon_access_key,
-    amazon_secret_key,
-    amazon_associate_tag,
-    amazon_country
+# Configura logging
+logging.basicConfig(
+    format="[%(levelname)s] %(message)s",
+    level=logging.INFO
 )
 
-# Risorse da recuperare
-resources = [
-    "ItemInfo.Title",
-    "ItemInfo.Features",
-    "Offers.Listings.Price",
-    "Offers.Listings.SavingBasis",
-    "Offers.Listings.SavingBasis.Price",
-    "Offers.Listings.SavingBasis.Percentage",
-    "Offers.Summaries.LowestPrice",
-    "Images.Primary.Large"
-]
+# Parametri dal file .env / GitHub Secrets
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
+KEYWORDS = [k.strip() for k in os.getenv("KEYWORDS", "").split(",") if k.strip()]
+MIN_SAVE = float(os.getenv("MIN_SAVE", 0))
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Bitly
-shortener = bitlyshortener.Shortener(tokens=[bitly_token], max_cache_size=256)
+# Inizializza Amazon API
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
 
-# Telegram
-bot = Bot(token=telegram_bot_token)
+# Inizializza Bitly
+bitly = Shortener(tokens=[BITLY_TOKEN], max_cache_size=256)
 
+# Inizializza Telegram
+bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
 
-def cerca_offerte(keyword):
+def shorten_url(url):
     try:
+        return bitly.shorten_urls([url])[0]
+    except Exception as e:
+        logging.error(f"Errore Bitly: {e}")
+        return url
+
+def get_deals(keyword):
+    try:
+        logging.info(f"🔍 Ricerca per: {keyword}")
         items = amazon.search_items(
             keywords=keyword,
-            search_index="All",
-            item_count=int(item_count),
-            Resources=resources  # ✅ solo qui, R maiuscola
+            item_count=ITEM_COUNT,
+            resources=[
+                "Images.Primary.Medium",
+                "ItemInfo.Title",
+                "Offers.Listings.Price",
+                "Offers.Listings.SavingBasis",
+                "Offers.Listings.PercentageSaved"
+            ]
         )
-        print(f"[INFO] '{keyword}': Amazon ha restituito {len(items)} risultati.")
-        return items
+
+        total_found = len(items)
+        filtered_items = []
+        scartati = 0
+
+        for item in items:
+            try:
+                price = item.offers.listings[0].price.amount
+                saving_basis = item.offers.listings[0].saving_basis.amount if item.offers.listings[0].saving_basis else None
+                percentage_saved = item.offers.listings[0].percentage_saved if item.offers.listings[0].percentage_saved else 0
+
+                if percentage_saved >= MIN_SAVE:
+                    filtered_items.append({
+                        "title": item.item_info.title.display_value,
+                        "url": shorten_url(item.detail_page_url),
+                        "price": price,
+                        "save": percentage_saved,
+                        "image": item.images.primary.medium.url
+                    })
+                else:
+                    scartati += 1
+            except Exception as e:
+                logging.warning(f"Prodotto non valido: {e}")
+
+        logging.info(f"  → Totali: {total_found} | Validi: {len(filtered_items)} | Scartati: {scartati}")
+        return filtered_items
+
     except Exception as e:
-        print(f"[ERRORE] ricerca '{keyword}': {e}")
+        logging.error(f"[ERRORE Amazon] ricerca '{keyword}': {e}")
         return []
 
-
-def estrai_sconto(item):
-    try:
-        prezzo_listino = item.offers.listings[0].saving_basis.price.value
-        prezzo_attuale = item.offers.listings[0].price.value
-        sconto = round((prezzo_listino - prezzo_attuale) / prezzo_listino * 100)
-        return sconto
-    except:
-        return 0
-
-
-def invia_telegram(messaggio):
-    bot.send_message(chat_id=telegram_chat_id, text=messaggio, parse_mode="HTML")
-
-
-def main():
-    for keyword in keywords:
-        items = cerca_offerte(keyword)
-        for item in items:
-            sconto = estrai_sconto(item)
-            if sconto >= min_save:
-                titolo = item.item_info.title.display_value
-                link = shortener.shorten_urls([item.detail_page_url])[0]
-                prezzo = item.offers.listings[0].price.display_amount
-                messaggio = f"<b>{titolo}</b>\nPrezzo: {prezzo}\nSconto: {sconto}%\n{link}"
-                invia_telegram(messaggio)
-
+def send_to_telegram(deals):
+    for deal in deals:
+        message = (
+            f"**{deal['title']}**\n"
+            f"💰 Prezzo: {deal['price']} €\n"
+            f"💸 Sconto: {deal['save']}%\n"
+            f"🔗 {deal['url']}"
+        )
+        try:
+            bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=deal['image'], caption=message, parse_mode="Markdown")
+        except Exception as e:
+            logging.error(f"Errore invio Telegram: {e}")
 
 if __name__ == "__main__":
-    main()
+    logging.info(f"🚀 Avvio bot Amazon alle {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    for keyword in KEYWORDS:
+        deals = get_deals(keyword)
+        if deals:
+            send_to_telegram(deals)
+        else:
+            logging.info(f"Nessuna offerta valida per '{keyword}'.")
+    logging.info("✅ Bot completato")
