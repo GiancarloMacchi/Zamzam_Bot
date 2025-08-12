@@ -1,45 +1,32 @@
 import os
 from dotenv import load_dotenv
 from amazon_api import cerca_prodotti
-from telegram_bot import invia_messaggio
+from telegram_api import invia_messaggio
 
-# Carica le variabili dal file .env
+# Carica le variabili d'ambiente
 load_dotenv()
 
-def esegui_bot():
-    # Recupera e valida MIN_SAVE
-    try:
-        MIN_DISCOUNT = int(os.getenv("MIN_SAVE", "20").strip() or 20)
-    except ValueError:
-        MIN_DISCOUNT = 20
+KEYWORDS = os.getenv("KEYWORDS")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
 
-    KEYWORDS = os.getenv("KEYWORDS", "").split(",")
-    ITEM_COUNT = int(os.getenv("ITEM_COUNT", "10").strip() or 10)
-    RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
+def main():
+    print("🔍 Avvio ricerca prodotti Amazon...")
+    prodotti = cerca_prodotti(KEYWORDS, item_count=ITEM_COUNT, min_save=MIN_SAVE)
 
-    if not KEYWORDS or all(k.strip() == "" for k in KEYWORDS):
-        print("Nessuna keyword specificata. Controlla la variabile KEYWORDS.")
+    if not prodotti:
+        print("❌ Nessun prodotto trovato.")
         return
 
-    for keyword in KEYWORDS:
-        keyword = keyword.strip()
-        if not keyword:
-            continue
+    print(f"✅ Trovati {len(prodotti)} prodotti. Invio su Telegram...")
+    for p in prodotti:
+        messaggio = f"{p['titolo']}\n💰 Prezzo: {p['prezzo']}€"
+        if p["risparmio"]:
+            messaggio += f" (-{p['risparmio']}%)"
+        messaggio += f"\n🔗 {p['link']}"
+        invia_messaggio(messaggio)
 
-        print(f"🔍 Ricerca per: {keyword}")
-        prodotti = cerca_prodotti(keyword, ITEM_COUNT, MIN_DISCOUNT)
-
-        if not prodotti:
-            print(f"Nessun prodotto trovato per '{keyword}' con sconto minimo {MIN_DISCOUNT}%.")
-            continue
-
-        for prodotto in prodotti:
-            invia_messaggio(prodotto)
-
-    if RUN_ONCE:
-        print("Esecuzione singola completata.")
-    else:
-        print("Modalità continua non implementata in questa versione.")
+    print("📤 Invio completato.")
 
 if __name__ == "__main__":
-    esegui_bot()
+    main()
