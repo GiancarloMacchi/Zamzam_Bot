@@ -2,7 +2,6 @@ import os
 from amazon_paapi import AmazonApi
 from dotenv import load_dotenv
 
-# Carica variabili da .env (non influisce se usi Repository Secrets su GitHub)
 load_dotenv()
 
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
@@ -10,15 +9,14 @@ AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-amazon = AmazonApi(
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    AMAZON_COUNTRY
-)
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+
 
 def cerca_prodotti(keywords, item_count=5, min_save=0):
-    """Cerca prodotti su Amazon usando amazon-paapi."""
+    """
+    Cerca prodotti su Amazon usando python-amazon-paapi.
+    Filtra prodotti senza immagine e sotto la soglia di sconto.
+    """
     try:
         results = amazon.search_products(
             keywords=keywords,
@@ -29,7 +27,12 @@ def cerca_prodotti(keywords, item_count=5, min_save=0):
         return []
 
     prodotti_filtrati = []
+
     for prodotto in results:
+        # Scarta se non ha immagine
+        if not prodotto.images or not prodotto.images[0].url:
+            continue
+
         prezzo_listino = prodotto.list_price or 0
         prezzo_offerta = prodotto.price or 0
 
@@ -44,7 +47,8 @@ def cerca_prodotti(keywords, item_count=5, min_save=0):
                 "prezzo": prezzo_offerta if prezzo_offerta else "N/D",
                 "prezzo_listino": prezzo_listino if prezzo_listino else "N/D",
                 "sconto": sconto,
-                "link": prodotto.detail_page_url
+                "link": prodotto.detail_page_url,
+                "immagine": prodotto.images[0].url if prodotto.images else None
             })
 
     return prodotti_filtrati
