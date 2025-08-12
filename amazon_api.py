@@ -1,29 +1,44 @@
-# amazon_api.py
-from amazon_paapi import AmazonApi
+import logging
 import os
+from amazon_api import get_amazon_products
+from utils import setup_logger, send_telegram_message
 
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")  # default Italia
+KEYWORDS = os.getenv("KEYWORDS", "bambini,infanzia,mamme").split(",")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))  # sconto minimo in %
+RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 
-def get_amazon_client():
-    """Crea e restituisce un client Amazon API."""
-    return AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-
-def get_amazon_products(keyword, item_count=10):
-    """
-    Cerca prodotti su Amazon in base alla keyword.
-    Ritorna una lista di oggetti prodotto.
-    """
-    client = get_amazon_client()
+def format_product_message(product):
+    """Formatta i dati di un prodotto in testo HTML per Telegram."""
+    title = product.item_info.title.display_value if hasattr(product, 'item_info') else "Prodotto senza titolo"
+    url = product.detail_page_url if hasattr(product, 'detail_page_url') else "#"
+    price = None
     try:
-        items = client.search_items(
-            keywords=keyword,
-            search_index="All",
-            item_count=item_count
-        )
-        return items
-    except Exception as e:
-        print(f"Errore durante la ricerca di '{keyword}': {e}")
-        return []
+        price = product.offers.listings[0].price.display_amount
+    except:
+        price = "Prezzo non disponibile"
+
+    return f"<b>{title}</b>\n💰 {price}\n🔗 <a href='{url}'>Acquista ora</a>"
+
+def esegui():
+    setup_logger()
+    total_sent = 0
+
+    for keyword in KEYWORDS:
+        logging.info(f"🔍 Searching '{keyword}' on Amazon.it")
+        products = get_amazon_products(keyword.strip(), ITEM_COUNT)
+
+        for product in products:
+            try:
+                message = format_product_message(product)
+                if send_telegram_message(message):
+                    total_sent += 1
+            except Exception as e:
+                logging.error(f"Errore durante l'elaborazione del prodotto: {e}")
+
+    logging.info(f"📦 Invio completato ✅ - Totale messaggi inviati: {total_sent}")
+
+if __name__ == "__main__":
+    esegui()
+    if not RUN_ONCE:
+        logging.info("⏳ RUN_ONCE è disattivato — il loop continuo non è implementato in questa versione.")
