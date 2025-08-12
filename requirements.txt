@@ -3,3 +3,4 @@ python-dotenv>=1.0.0
 beautifulsoup4>=4.12.2
 bitlyshortener==0.6.0
 amazon-paapi5
+python-telegram-bot>=20.0
