@@ -1,7 +1,5 @@
 import os
-import requests
-from bs4 import BeautifulSoup
-from amazon_paapi import AmazonApi, SearchItemsRequest
+from amazon_paapi import AmazonApi
 from bitlyshortener import Shortener
 from telegram import Bot
 
@@ -34,14 +32,12 @@ bot = Bot(token=telegram_token)
 
 def cerca_offerte(keyword):
     try:
-        request = SearchItemsRequest(
-            Keywords=keyword,
-            SearchIndex="All",
-            ItemCount=int(item_count),
-            Resources=resources
+        items = amazon.search_items(
+            keywords=keyword,
+            search_index="All",
+            item_count=int(item_count),
+            resources=resources
         )
-        response = amazon.search_items(request)
-        items = response["SearchResult"]["Items"]
         print(f"[INFO] '{keyword}': Amazon ha restituito {len(items)} risultati.")
         return items
     except Exception as e:
@@ -61,10 +57,15 @@ def filtra_offerte(items, keyword):
                 url = item["DetailPageURL"]
                 short_url = shortener.shorten_urls([url])[0]
                 risultati.append(f"{titolo}\n💰 {prezzo}€ (-{sconto}%)\n🔗 {short_url}")
-        except Exception:
+                print(f"[OK] '{titolo}' - Prezzo: {prezzo}€, Sconto: {sconto}% ✅")
+            else:
+                print(f"[SCARTATO] '{titolo}' - Sconto: {sconto}% (< {min_save}%) ❌")
+
+        except Exception as err:
+            print(f"[ERRORE DATI] {err} - Oggetto: {item}")
             continue
 
-    print(f"[INFO] '{keyword}': {len(risultati)} offerte dopo il filtro sconto >= {min_save}%.")
+    print(f"[INFO] '{keyword}': {len(risultati)} offerte valide su {len(items)} totali.")
     return risultati
 
 def invia_telegram(messaggi):
