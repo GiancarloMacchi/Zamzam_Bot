@@ -16,11 +16,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create and activate venv
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-
       - name: Install dependencies and run bot
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
@@ -33,6 +28,7 @@ jobs:
           KEYWORDS: ${{ secrets.KEYWORDS }}
           ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
         run: |
+          python -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
