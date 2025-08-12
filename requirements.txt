@@ -1,3 +1,2 @@
-requests>=2.28
-python-dotenv>=1.0.0
-python-amazon-paapi>=5.0.0
+amazon-paapi
+python-dotenv
