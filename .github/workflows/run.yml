@@ -1,35 +1,21 @@
-name: Run Amazon Telegram Bot
+from amightygirl.paapi5_python_sdk import AmazonApi
+import os
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 6,12,18 * * *'  # Pubblica 3 volte al giorno (mattina, pomeriggio, sera)
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-# ... (altre parti del file)
+def get_amazon_client():
+    """
+    Crea e restituisce un'istanza del client Amazon PAAPI.
+    """
+    if not all([AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG]):
+        raise ValueError("Le chiavi di accesso e l'associate tag di Amazon devono essere impostati.")
 
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies and run bot
-        env:
-          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
-          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
-          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
-          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MIN_DISCOUNT: ${{ secrets.MIN_DISCOUNT }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          python main.py
+    return AmazonApi(
+        access_key=AMAZON_ACCESS_KEY,
+        secret_key=AMAZON_SECRET_KEY,
+        partner_tag=AMAZON_ASSOCIATE_TAG,
+        host=f"webservices.amazon.{AMAZON_COUNTRY.lower()}"
+    )
