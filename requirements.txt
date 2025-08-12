@@ -1,2 +1,2 @@
-amazon-paapi
+python-amazon-paapi
 python-dotenv
