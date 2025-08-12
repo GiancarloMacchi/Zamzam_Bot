@@ -1,44 +1,69 @@
+# main.py
 import logging
-import os
-from amazon_api import get_amazon_products
-from utils import setup_logger, send_telegram_message
+import sys
 
-KEYWORDS = os.getenv("KEYWORDS", "bambini,infanzia,mamme").split(",")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
-MIN_SAVE = int(os.getenv("MIN_SAVE", 0))  # sconto minimo in %
-RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
+from utils import (
+    get_config,
+    check_required_config,
+    search_amazon_products,
+    qualifies_for_posting,
+    make_message_for_product,
+    send_telegram_message,
+)
 
-def format_product_message(product):
-    """Formatta i dati di un prodotto in testo HTML per Telegram."""
-    title = product.item_info.title.display_value if hasattr(product, 'item_info') else "Prodotto senza titolo"
-    url = product.detail_page_url if hasattr(product, 'detail_page_url') else "#"
-    price = None
-    try:
-        price = product.offers.listings[0].price.display_amount
-    except:
-        price = "Prezzo non disponibile"
+# il search_amazon_products è definito in amazon_api.py — utils importerà amazon_api
 
-    return f"<b>{title}</b>\n💰 {price}\n🔗 <a href='{url}'>Acquista ora</a>"
+logging.basicConfig(
+    level=logging.INFO,
+    format="***%d-%m-%*** %H:%M:%S,%f - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
-def esegui():
-    setup_logger()
+
+def esegui_bot():
+    cfg = get_config()
+    missing = check_required_config(cfg)
+    if missing:
+        logger.error("Errore: una o più variabili d'ambiente mancanti: %s", ", ".join(missing))
+        sys.exit(1)
+
+    keywords = [k.strip() for k in (cfg.get("KEYWORDS") or "").split(",") if k.strip()]
+    if not keywords:
+        logger.info("Nessuna keyword fornita, uso lista di default interna.")
+        keywords = ["bambino", "bambini", "mamma", "neonato", "gioco", "giocattolo", "scuola", "libro"]
+
     total_sent = 0
 
-    for keyword in KEYWORDS:
-        logging.info(f"🔍 Searching '{keyword}' on Amazon.it")
-        products = get_amazon_products(keyword.strip(), ITEM_COUNT)
+    for kw in keywords:
+        logger.info("🔎 Searching '%s' on Amazon.it", kw)
+        try:
+            # search_amazon_products è in amazon_api.py, utils lo richiama dinamicamente
+            from amazon_api import search_amazon_products  # import locale per evitare circolarità
+            products = search_amazon_products(kw)
+        except Exception as e:
+            logger.error("ERROR - Amazon API error: %s", e)
+            continue
 
-        for product in products:
+        if not products:
+            logger.info("Nessun prodotto trovato per '%s'", kw)
+            continue
+
+        # prodotti potrebbe essere lista di items
+        for p in products:
             try:
-                message = format_product_message(product)
-                if send_telegram_message(message):
+                if not qualifies_for_posting(p, cfg):
+                    continue
+
+                message = make_message_for_product(p, cfg)
+                ok = send_telegram_message(cfg["TELEGRAM_BOT_TOKEN"], cfg["TELEGRAM_CHAT_ID"], message)
+                if ok:
                     total_sent += 1
             except Exception as e:
-                logging.error(f"Errore durante l'elaborazione del prodotto: {e}")
+                logger.exception("Errore nella gestione prodotto: %s", e)
+                # continua
 
-    logging.info(f"📦 Invio completato ✅ - Totale messaggi inviati: {total_sent}")
+    logger.info("Invio completato ✅ - Totale messaggi inviati: %d", total_sent)
+
 
 if __name__ == "__main__":
-    esegui()
-    if not RUN_ONCE:
-        logging.info("⏳ RUN_ONCE è disattivato — il loop continuo non è implementato in questa versione.")
+    esegui_bot()
