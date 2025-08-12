@@ -3,7 +3,7 @@ name: Run Amazon Telegram Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'  # ogni 6 ore (modifica se vuoi)
+    - cron: '0 6,12,18 * * *'  # Pubblica 3 volte al giorno (mattina, pomeriggio, sera)
 
 jobs:
   run:
@@ -23,11 +23,14 @@ jobs:
 
       - name: Run bot
         env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MIN_DISCOUNT: ${{ secrets.MIN_DISCOUNT }}          # opzionale
-          KEYWORDS: ${{ secrets.KEYWORDS }}                  # opzionale
-          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}            # opzionale
+          MIN_DISCOUNT: ${{ secrets.MIN_DISCOUNT }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
         run: |
-          python run-bot.py
+          python main.py
