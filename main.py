@@ -10,6 +10,7 @@ def esegui_bot():
     """
     print(f"🔍 Ricerca di '{KEYWORDS}' su Amazon...")
     prodotti = search_amazon_products(KEYWORDS, ITEM_COUNT)
+
     if not prodotti:
         print("Nessun prodotto trovato.")
         return
