@@ -41,12 +41,14 @@ def cerca_offerte(keyword):
             Resources=resources
         )
         response = amazon.search_items(request)
-        return response["SearchResult"]["Items"]
+        items = response["SearchResult"]["Items"]
+        print(f"[INFO] '{keyword}': Amazon ha restituito {len(items)} risultati.")
+        return items
     except Exception as e:
-        print(f"Errore ricerca '{keyword}': {e}")
+        print(f"[ERRORE] ricerca '{keyword}': {e}")
         return []
 
-def filtra_offerte(items):
+def filtra_offerte(items, keyword):
     risultati = []
     for item in items:
         try:
@@ -61,6 +63,8 @@ def filtra_offerte(items):
                 risultati.append(f"{titolo}\n💰 {prezzo}€ (-{sconto}%)\n🔗 {short_url}")
         except Exception:
             continue
+
+    print(f"[INFO] '{keyword}': {len(risultati)} offerte dopo il filtro sconto >= {min_save}%.")
     return risultati
 
 def invia_telegram(messaggi):
@@ -69,7 +73,8 @@ def invia_telegram(messaggi):
 
 if __name__ == "__main__":
     for kw in keywords:
-        items = cerca_offerte(kw.strip())
-        offerte = filtra_offerte(items)
+        kw = kw.strip()
+        items = cerca_offerte(kw)
+        offerte = filtra_offerte(items, kw)
         if offerte:
             invia_telegram(offerte)
