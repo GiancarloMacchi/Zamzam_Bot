@@ -1,5 +1,5 @@
-amazon-paapi==5.0.0
-requests==2.31.0
+amazon-paapi==5.0.1
+requests
 python-telegram-bot==13.15
 python-dotenv==1.0.1
 beautifulsoup4==4.12.3
