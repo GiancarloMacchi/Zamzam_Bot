@@ -31,4 +31,5 @@ jobs:
           MIN_DISCOUNT: ${{ secrets.MIN_DISCOUNT }}
           AMAZON_COUNTRY: "it"
         run: |
-          python run.py
+          python run-bot.py
+
