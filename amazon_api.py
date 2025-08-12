@@ -1,21 +1,27 @@
-from amightygirl.paapi5_python_sdk import AmazonApi
 import os
+from paapi5_python_sdk.api.default_api import DefaultApi
+from paapi5_python_sdk.models import GetItemsRequest, SearchItemsRequest
+from paapi5_python_sdk.paapi5_python_sdk import Paapi5PythonSdk
+from paapi5_python_sdk.configuration import Configuration
+from paapi5_python_sdk.api_client import ApiClient
 
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT").lower()
 
 def get_amazon_client():
     """
-    Crea e restituisce un'istanza del client Amazon PAAPI.
+    Restituisce un'istanza dell'API client ufficiale Amazon PAAPI.
     """
     if not all([AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG]):
-        raise ValueError("Le chiavi di accesso e l'associate tag di Amazon devono essere impostati.")
+        raise ValueError("Chiavi di accesso Amazon e Associate Tag devono essere impostati nei secrets.")
 
-    return AmazonApi(
+    host = f"webservices.amazon.{AMAZON_COUNTRY}"
+    config = Configuration(
         access_key=AMAZON_ACCESS_KEY,
         secret_key=AMAZON_SECRET_KEY,
-        partner_tag=AMAZON_ASSOCIATE_TAG,
-        host=f"webservices.amazon.{AMAZON_COUNTRY.lower()}"
+        host=host
     )
+    api_client = ApiClient(configuration=config)
+    return DefaultApi(api_client)
