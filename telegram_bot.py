@@ -1,39 +1,35 @@
 import os
-import requests
-from dotenv import load_dotenv
+import logging
+from telegram import Bot
+from telegram.error import TelegramError
 
-# Carica variabili d'ambiente
-load_dotenv()
+# Configura logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# Recupera le variabili d'ambiente
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# Inizializza il bot
+if not TELEGRAM_BOT_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN non impostato nelle variabili d'ambiente.")
 
-def invia_messaggio(testo):
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+def send_message(text: str) -> bool:
     """
-    Invia un messaggio di testo al canale/chat Telegram.
-    :param testo: Stringa del messaggio.
+    Invia un messaggio al canale/chat Telegram configurato.
+    Ritorna True se inviato con successo, False in caso di errore.
     """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ TOKEN o CHAT_ID mancanti. Controlla il file .env")
+    if not TELEGRAM_CHAT_ID:
+        logger.error("TELEGRAM_CHAT_ID non impostato.")
         return False
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": testo,
-        "disable_web_page_preview": False,
-        "parse_mode": "HTML"
-    }
-
     try:
-        response = requests.post(url, data=payload)
-        if response.status_code == 200:
-            print("📨 Messaggio inviato con successo")
-            return True
-        else:
-            print(f"❌ Errore Telegram: {response.status_code} - {response.text}")
-            return False
-    except Exception as e:
-        print(f"❌ Errore nell'invio del messaggio Telegram: {e}")
+        bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=text)
+        logger.info(f"Messaggio inviato: {text}")
+        return True
+    except TelegramError as e:
+        logger.error(f"Errore nell'invio del messaggio: {e}")
         return False
