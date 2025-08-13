@@ -7,26 +7,32 @@ logger = logging.getLogger(__name__)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def send_to_telegram(item):
+def send_to_telegram(items):
     """
-    Invia un messaggio a Telegram con titolo e link dell'articolo.
+    Invia la lista di articoli a Telegram come messaggi separati.
+    Ogni elemento di `items` deve contenere: title, price, url, image_url.
     """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.error("❌ Token o Chat ID di Telegram mancanti.")
+        logger.error("❌ TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID mancanti nelle variabili d'ambiente.")
         return
 
-    title = item.get("title") or "Senza titolo"
-    link = item.get("link") or ""
-    message = f"📌 {title}\n🔗 {link}"
+    for item in items:
+        message = (
+            f"📦 <b>{item.get('title', 'Titolo non disponibile')}</b>\n"
+            f"💰 Prezzo: {item.get('price', 'N/A')}\n"
+            f"🔗 <a href='{item.get('url', '')}'>Vai all'offerta</a>"
+        )
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "disable_web_page_preview": False}
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False
+        }
 
-    try:
-        resp = requests.post(url, json=payload, timeout=30)
-        if resp.status_code == 200:
-            logger.info("✅ Messaggio inviato con successo a Telegram.")
-        else:
-            logger.error("❌ Errore Telegram API (%s): %s", resp.status_code, resp.text)
-    except Exception as e:
-        logger.error("❌ Errore nell'invio a Telegram: %s", e)
+        try:
+            response = requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", data=payload)
+            response.raise_for_status()
+            logger.info(f"✅ Inviato a Telegram: {item.get('title', '')}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Errore nell'invio a Telegram: {e}")
