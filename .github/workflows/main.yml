@@ -1,37 +1,31 @@
-name: Run Amazon Bot
+name: Esegui Amazon Bot
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *" # ogni 6 ore (UTC)
+    - cron: "0 8 * * *"
 
 jobs:
-  run-bot:
+  run:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
+      - uses: actions/checkout@v4
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
+          python-version: '3.11'
       - name: Install dependencies
-        run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Create .env file
-        run: |
-          echo "AMAZON_ACCESS_KEY=${{ secrets.AMAZON_ACCESS_KEY }}" >> .env
-          echo "AMAZON_SECRET_KEY=${{ secrets.AMAZON_SECRET_KEY }}" >> .env
-          echo "AMAZON_ASSOCIATE_TAG=${{ secrets.AMAZON_ASSOCIATE_TAG }}" >> .env
-          echo "AMAZON_COUNTRY=${{ secrets.AMAZON_COUNTRY }}" >> .env
-          echo "KEYWORDS=${{ secrets.KEYWORDS }}" >> .env
-          echo "ITEM_COUNT=${{ secrets.ITEM_COUNT }}" >> .env
-          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
-          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
-
+        run: pip install --upgrade pip && pip install -r requirements.txt
       - name: Run bot
+        env:
+          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: python main.py
