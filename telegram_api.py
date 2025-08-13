@@ -1,28 +1,25 @@
 import requests
+import os
+
 
 class TelegramBot:
-    def __init__(self, token, chat_id):
-        self.token = token
-        self.chat_id = chat_id
-        self.base_url = f"https://api.telegram.org/bot{token}"
+    def __init__(self):
+        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
+        self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        if not self.token or not self.chat_id:
+            raise ValueError("TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID devono essere impostati come variabili d'ambiente.")
 
     def send_message(self, text):
-        url = f"{self.base_url}/sendMessage"
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         payload = {
             "chat_id": self.chat_id,
             "text": text,
-            "parse_mode": "HTML"
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False
         }
-        r = requests.post(url, data=payload)
-        return r.json()
 
-    def send_photo(self, photo_url, caption=""):
-        url = f"{self.base_url}/sendPhoto"
-        payload = {
-            "chat_id": self.chat_id,
-            "photo": photo_url,
-            "caption": caption,
-            "parse_mode": "HTML"
-        }
-        r = requests.post(url, data=payload)
-        return r.json()
+        response = requests.post(url, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"Errore nell'invio del messaggio: {response.text}")
+
+        return response.json()
