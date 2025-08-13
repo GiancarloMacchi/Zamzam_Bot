@@ -1,40 +1,29 @@
-import os
-from dotenv import load_dotenv
+import logging
 from amazon_client import get_items
 from telegram_bot import send_telegram_message
+import os
+from dotenv import load_dotenv
 
-# Carica variabili ambiente
+logging.basicConfig(level=logging.INFO)
+
 load_dotenv()
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def main():
-    print("🔍 Recupero articoli da Amazon...")
+    logging.info("🔍 Recupero articoli da Amazon...")
     items = get_items()
 
     if not items:
-        error_message = "❌ Nessuna offerta trovata o errore nelle API Amazon."
-        print(error_message)
-        send_telegram_message(BOT_TOKEN, CHAT_ID, error_message)
+        send_telegram_message(
+            TELEGRAM_CHAT_ID,
+            "❌ Nessuna offerta trovata o errore nelle API Amazon."
+        )
         return
 
-    print(f"✅ {len(items)} offerte trovate. Invio a Telegram...")
     for item in items:
-        try:
-            message = (
-                f"📦 {item['title']}\n"
-                f"💰 {item['price']} {item['currency']}\n"
-                f"💸 Sconto: {item['saving']}%\n"
-                f"🔗 {item['url']}"
-            )
-            send_telegram_message(BOT_TOKEN, CHAT_ID, message)
-        except Exception as e:
-            print(f"Errore nell'invio di un messaggio Telegram: {e}")
+        message = f"📦 {item['title']}\n💰 {item['price']} {item['currency']}\n💸 Sconto: {item['saving']}%\n🔗 {item['url']}"
+        send_telegram_message(TELEGRAM_CHAT_ID, message)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print("❌ Errore generale:")
-        print(e)
+    main()
