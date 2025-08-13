@@ -1,63 +1,37 @@
-name: Run Zamzam Bot
+name: Run Amazon Bot
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 8 * * *" # Tutti i giorni alle 8:00 UTC
+    - cron: "0 */6 * * *" # ogni 6 ore (UTC)
 
 jobs:
-  build:
+  run-bot:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: 3.11
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Run bot
-      run: python main.py
-      env:
-        AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
-        AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
-        AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
-        AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-        BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
-        ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-        KEYWORDS: ${{ secrets.KEYWORDS }}
-        MIN_SAVE: ${{ secrets.MIN_SAVE }}
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        RUN_ONCE: ${{ secrets.RUN_ONCE }}
+      - name: Create .env file
+        run: |
+          echo "AMAZON_ACCESS_KEY=${{ secrets.AMAZON_ACCESS_KEY }}" >> .env
+          echo "AMAZON_SECRET_KEY=${{ secrets.AMAZON_SECRET_KEY }}" >> .env
+          echo "AMAZON_ASSOCIATE_TAG=${{ secrets.AMAZON_ASSOCIATE_TAG }}" >> .env
+          echo "AMAZON_COUNTRY=${{ secrets.AMAZON_COUNTRY }}" >> .env
+          echo "KEYWORDS=${{ secrets.KEYWORDS }}" >> .env
+          echo "ITEM_COUNT=${{ secrets.ITEM_COUNT }}" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
 
-    - name: Export dependencies
-      if: success()
-      run: |
-        pip freeze > requirements.txt
-        pip freeze > pip_freeze.txt
-
-    - name: Commit updated requirements.txt
-      if: success()
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add requirements.txt
-        git commit -m "Update requirements.txt [skip ci]" || echo "No changes to commit"
-        git push
-
-    - name: Upload dependency artifacts
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: dependency-files
-        path: pip_freeze.txt
+      - name: Run bot
+        run: python main.py
