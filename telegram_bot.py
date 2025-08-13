@@ -15,16 +15,18 @@ def send_to_telegram(item):
         logger.error("❌ Token o Chat ID di Telegram mancanti.")
         return
 
-    message = f"📌 {item.get('title', 'Senza titolo')}\n🔗 {item.get('link', '')}"
+    title = item.get("title") or "Senza titolo"
+    link = item.get("link") or ""
+    message = f"📌 {title}\n🔗 {link}"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "disable_web_page_preview": False}
 
     try:
-        response = requests.post(url, json=payload)
-        if response.status_code == 200:
+        resp = requests.post(url, json=payload, timeout=30)
+        if resp.status_code == 200:
             logger.info("✅ Messaggio inviato con successo a Telegram.")
         else:
-            logger.error(f"❌ Errore Telegram API: {response.text}")
+            logger.error("❌ Errore Telegram API (%s): %s", resp.status_code, resp.text)
     except Exception as e:
-        logger.error(f"❌ Errore nell'invio a Telegram: {e}")
+        logger.error("❌ Errore nell'invio a Telegram: %s", e)
