@@ -23,22 +23,22 @@ def get_items():
             item_count=ITEM_COUNT
         )
 
-        # Salva la risposta completa per debug
+        # Salva sempre la risposta, anche se è un errore
         with open("amazon_debug.json", "w", encoding="utf-8") as f:
             json.dump(results.to_dict(), f, ensure_ascii=False, indent=2)
 
         items_list = []
         for item in results.items:
             try:
-                title = item.item_info.title.display_value
-                price_info = item.offers.listings[0].price
-                price = price_info.amount
-                currency = price_info.currency
+                title = item["ItemInfo"]["Title"]["DisplayValue"]
+                price_info = item["Offers"]["Listings"][0]["Price"]
+                price = price_info["Amount"]
+                currency = price_info["Currency"]
                 saving = 0
-                if item.offers.listings[0].price.savings:
-                    saving = item.offers.listings[0].price.savings.percentage
+                if "Savings" in price_info:
+                    saving = price_info["Savings"].get("Percentage", 0)
 
-                url = item.detail_page_url
+                url = item["DetailPageURL"]
 
                 if saving >= MIN_SAVE:
                     items_list.append({
@@ -57,4 +57,9 @@ def get_items():
     except Exception as e:
         print("❌ Errore durante il recupero degli articoli da Amazon API:")
         print(e)
+
+        # Log anche l'errore in JSON
+        with open("amazon_debug.json", "w", encoding="utf-8") as f:
+            json.dump({"error": str(e)}, f, ensure_ascii=False, indent=2)
+
         return []
