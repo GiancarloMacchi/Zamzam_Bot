@@ -1,7 +1,11 @@
-import json
 import os
+from dotenv import load_dotenv
 from amazon_client import get_items
 from telegram_bot import send_telegram_message
+
+load_dotenv()
+
+RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 
 print("🚀 Avvio Amazon Bot...")
 print(f"🌍 Paese Amazon: {os.getenv('AMAZON_COUNTRY')}")
@@ -11,21 +15,20 @@ print(f"📦 Numero massimo risultati: {os.getenv('ITEM_COUNT')}")
 
 try:
     items = get_items()
-
-    # Salva dati grezzi per debug
-    debug_data = []
-    for item in items:
-        debug_data.append(item.__dict__ if hasattr(item, '__dict__') else str(item))
-
-    with open("amazon_debug.json", "w", encoding="utf-8") as f:
-        json.dump(debug_data, f, ensure_ascii=False, indent=4)
-
-    print("💾 File amazon_debug.json salvato per il debug.")
-
-    # Se vuoi mandare solo offerte filtrate, metti qui la logica
-    for item in items:
-        send_telegram_message(f"{item.title} - {item.detail_page_url}")
-
+    if not items:
+        print("⚠ Nessun articolo trovato con i criteri impostati.")
+    else:
+        for item in items:
+            message = (
+                f"📦 *{item['title']}*\n"
+                f"💰 Prezzo: {item['price']} {item['currency']}\n"
+                f"💸 Sconto: {item['saving']}%\n"
+                f"🔗 [Vedi su Amazon]({item['url']})"
+            )
+            send_telegram_message(message)
 except Exception as e:
-    print("❌ Errore durante il recupero degli articoli da Amazon API:")
+    print("❌ Errore durante l'esecuzione del bot:")
     print(e)
+
+if RUN_ONCE:
+    print("✅ Esecuzione singola completata.")
