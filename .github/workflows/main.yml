@@ -10,12 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: pip install --upgrade pip && pip install -r requirements.txt
+
       - name: Run bot
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
@@ -29,3 +32,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: python main.py
+
+      - name: Upload Amazon debug JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amazon-debug
+          path: amazon_debug.json
+          retention-days: 7
