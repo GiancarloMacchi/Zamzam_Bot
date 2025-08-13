@@ -3,91 +3,99 @@ import json
 import random
 from datetime import datetime
 from amazon_paapi import AmazonAPI
-from telegram_api import TelegramBot
+import requests
 
-# ===== CONFIGURAZIONE =====
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+# ======== CONFIG ========
+ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+
+BITLY_TOKEN = os.getenv("BITLY_TOKEN")
 ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
-MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
 KEYWORDS = json.loads(os.getenv("KEYWORDS", '["infanzia"]'))
+MIN_SAVE = float(os.getenv("MIN_SAVE", 0))
+RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
 
-# ===== FILE LOCALI =====
-SEEN_ITEMS_FILE = ".seen_items.json"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+# ======== FILES ========
 PHRASES_FILE = "phrases.json"
+SEEN_FILE = ".seen_items.json"
 
-# ===== INIZIALIZZAZIONE =====
-bot = TelegramBot()
-amazon_api = AmazonAPI(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+# ======== LOAD PHRASES ========
+with open(PHRASES_FILE, "r", encoding="utf-8") as f:
+    PHRASES = json.load(f)
 
-# ===== FUNZIONI =====
-def load_seen_items():
-    if os.path.exists(SEEN_ITEMS_FILE):
+# ======== AMAZON API ========
+amazon = AmazonAPI(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+
+# ======== SEEN ITEMS ========
+if os.path.exists(SEEN_FILE):
+    with open(SEEN_FILE, "r", encoding="utf-8") as f:
         try:
-            with open(SEEN_ITEMS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+            seen_items = json.load(f)
         except json.JSONDecodeError:
-            return []
-    return []
+            seen_items = []
+else:
+    seen_items = []
 
-def save_seen_items(seen_items):
-    with open(SEEN_ITEMS_FILE, "w", encoding="utf-8") as f:
-        json.dump(seen_items, f)
-
-def load_phrases():
-    if os.path.exists(PHRASES_FILE):
-        with open(PHRASES_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def choose_phrase(phrases, keyword):
-    if keyword in phrases:
-        return random.choice(phrases[keyword])
-    elif "default" in phrases:
-        return random.choice(phrases["default"])
-    return ""
-
-# ===== MAIN =====
-if __name__ == "__main__":
-    print(f"[INFO] 🚀 Avvio bot Amazon - Partner tag: {AMAZON_ASSOCIATE_TAG}")
-
-    seen_items = load_seen_items()
-    phrases = load_phrases()
-
-    for keyword in KEYWORDS:
-        print(f"[INFO] 🔍 Ricerca per: {keyword}")
-        results = amazon_api.search_items(
-            keywords=keyword,
-            item_count=ITEM_COUNT
+def shorten_url(url):
+    if not BITLY_TOKEN:
+        return url
+    try:
+        r = requests.post(
+            "https://api-ssl.bitly.com/v4/shorten",
+            headers={"Authorization": f"Bearer {BITLY_TOKEN}", "Content-Type": "application/json"},
+            json={"long_url": url}
         )
+        if r.status_code == 200:
+            return r.json().get("link", url)
+    except Exception:
+        pass
+    return url
 
-        for item in results:
-            asin = item.asin
-            if asin in seen_items:
-                continue
+def send_telegram_message(text):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                  data={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"})
 
-            if hasattr(item, "offers") and item.offers and item.list_price and item.offer_price:
-                discount = round((1 - (item.offer_price / item.list_price)) * 100, 2)
-            else:
-                discount = 0
+# ======== MAIN LOOP ========
+for keyword in KEYWORDS:
+    print(f"[INFO] 🔍 Ricerca per: {keyword}")
+    try:
+        products = amazon.search_items(keywords=keyword, item_count=ITEM_COUNT)
+    except Exception as e:
+        print(f"[ERROR] Amazon API error: {e}")
+        continue
 
-            if discount < MIN_SAVE:
-                continue
+    for p in products:
+        asin = p.asin
+        if asin in seen_items:
+            continue
 
-            phrase = choose_phrase(phrases, keyword)
+        try:
+            title = p.item_info.title.display_value
+            url = shorten_url(p.detail_page_url)
+            price = p.offers.listings[0].price.amount
+            saving = p.offers.listings[0].saving.amount if p.offers.listings[0].saving else 0
+        except Exception:
+            continue
 
-            message = (
-                f"{phrase}\n\n"
-                f"<b>{item.title}</b>\n"
-                f"💰 <b>Prezzo:</b> {item.offer_price}€\n"
-                f"📉 <b>Sconto:</b> {discount}%\n"
-                f"🔗 <a href='{item.detail_page_url}'>Vedi su Amazon</a>"
-            )
+        if saving < MIN_SAVE:
+            continue
 
-            bot.send_message(message)
-            seen_items.append(asin)
+        phrase = random.choice(PHRASES.get(keyword.lower(), PHRASES["default"]))
+        message = f"{phrase}\n\n<b>{title}</b>\n💶 {price}€\n🔗 {url}"
 
-    save_seen_items(seen_items)
-    print("[INFO] ✅ Completato.")
+        send_telegram_message(message)
+        seen_items.append(asin)
+
+# ======== SAVE SEEN ITEMS ========
+with open(SEEN_FILE, "w", encoding="utf-8") as f:
+    json.dump(seen_items, f)
+
+if RUN_ONCE:
+    print("[INFO] ✅ Esecuzione singola completata.")
