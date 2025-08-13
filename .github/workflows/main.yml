@@ -1,31 +1,45 @@
-name: Esegui Amazon Bot
+name: Run Amazon Bot
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 8 * * *"
 
 jobs:
-  run:
+  run-bot:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
+
       - name: Install dependencies
-        run: pip install --upgrade pip && pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Run bot
+        run: python main.py
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
-        run: python main.py
+
+      - name: Upload debug files
+        uses: actions/upload-artifact@v3
+        with:
+          name: amazon-debug-files
+          path: |
+            amazon_debug.json
+            amazon_raw_response.json
