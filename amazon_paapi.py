@@ -2,74 +2,99 @@ import requests
 import json
 import logging
 import time
+from urllib.parse import quote
+from hashlib import sha256
 import hmac
-import hashlib
 import base64
-from datetime import datetime
-from urllib.parse import quote, urlencode
-from dotenv import load_dotenv
+import datetime
 import os
 
-load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+class AmazonApi:
+    def __init__(self, access_key, secret_key, associate_tag, country):
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.associate_tag = associate_tag
+        self.country = country.lower()
+        self.host = f"webservices.amazon.{self.country}"
+        self.endpoint = f"https://{self.host}/paapi5/searchitems"
 
-logger = logging.getLogger(__name__)
+    def sign(self, payload):
+        # Genera intestazioni firmate per Amazon PAAPI
+        method = "POST"
+        service = "ProductAdvertisingAPI"
+        region = "eu-west-1" if self.country in ["fr", "de", "it", "es", "uk"] else "us-east-1"
 
-HOSTS = {
-    "IT": "webservices.amazon.it",
-    "US": "webservices.amazon.com",
-    "UK": "webservices.amazon.co.uk",
-    "DE": "webservices.amazon.de",
-    "FR": "webservices.amazon.fr",
-    "ES": "webservices.amazon.es"
-}
+        t = datetime.datetime.utcnow()
+        amz_date = t.strftime('%Y%m%dT%H%M%SZ')
+        datestamp = t.strftime('%Y%m%d')
 
-def sign_request(params, secret_key):
-    sorted_params = sorted(params.items())
-    canonical_query = urlencode(sorted_params, quote_via=quote)
-    string_to_sign = f"GET\n{HOSTS[AMAZON_COUNTRY]}\n/paapi5/getitems\n{canonical_query}"
-    digest = hmac.new(
-        bytes(secret_key, encoding="utf-8"),
-        msg=bytes(string_to_sign, encoding="utf-8"),
-        digestmod=hashlib.sha256
-    ).digest()
-    return base64.b64encode(digest).decode()
+        canonical_uri = "/paapi5/searchitems"
+        canonical_querystring = ""
+        canonical_headers = f"content-encoding:amz-1.0\ncontent-type:application/json; charset=utf-8\nhost:{self.host}\nx-amz-date:{amz_date}\n"
+        signed_headers = "content-encoding;content-type;host;x-amz-date"
 
-def amazon_search(keywords, item_count):
-    logger.info(f"🔍 Chiamata Amazon API con keyword: {keywords}")
-    
-    endpoint = f"https://{HOSTS[AMAZON_COUNTRY]}/paapi5/searchitems"
-    headers = {
-        "Content-Type": "application/json; charset=UTF-8",
-        "Host": HOSTS[AMAZON_COUNTRY],
-        "X-Amz-Date": datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'),
-        "X-Amz-Target": "com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems",
-    }
-    
-    payload = {
-        "Keywords": keywords,
-        "SearchIndex": "All",
-        "ItemCount": item_count,
-        "Resources": [
-            "Images.Primary.Large",
-            "ItemInfo.Title",
-            "Offers.Listings.Price",
-            "Offers.Listings.SavingBasis"
-        ],
-        "PartnerTag": AMAZON_ASSOCIATE_TAG,
-        "PartnerType": "Associates"
-    }
-    
-    payload_json = json.dumps(payload)  # <-- FIX QUI
-    
-    try:
-        response = requests.post(endpoint, headers=headers, data=payload_json)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        logger.error(f"❌ Errore durante il recupero degli articoli da Amazon API:\n{e}")
-        return None
+        payload_hash = sha256(payload.encode('utf-8')).hexdigest()
+
+        canonical_request = '\n'.join([method, canonical_uri, canonical_querystring,
+                                       canonical_headers, signed_headers, payload_hash])
+
+        algorithm = 'AWS4-HMAC-SHA256'
+        credential_scope = f"{datestamp}/{region}/{service}/aws4_request"
+        string_to_sign = '\n'.join([algorithm, amz_date, credential_scope,
+                                    sha256(canonical_request.encode('utf-8')).hexdigest()])
+
+        def sign_key(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), sha256).digest()
+
+        k_date = sign_key(('AWS4' + self.secret_key).encode('utf-8'), datestamp)
+        k_region = sign_key(k_date, region)
+        k_service = sign_key(k_region, service)
+        k_signing = sign_key(k_service, 'aws4_request')
+
+        signature = hmac.new(k_signing, string_to_sign.encode('utf-8'), sha256).hexdigest()
+
+        authorization_header = (
+            f"{algorithm} Credential={self.access_key}/{credential_scope}, "
+            f"SignedHeaders={signed_headers}, Signature={signature}"
+        )
+
+        headers = {
+            'Content-Encoding': 'amz-1.0',
+            'Content-Type': 'application/json; charset=utf-8',
+            'Host': self.host,
+            'X-Amz-Date': amz_date,
+            'Authorization': authorization_header
+        }
+
+        return headers
+
+    def search_items(self, keywords, item_count=10, min_saving_percent=0):
+        payload = json.dumps({
+            "Keywords": keywords,
+            "PartnerTag": self.associate_tag,
+            "PartnerType": "Associates",
+            "Marketplace": f"www.amazon.{self.country}",
+            "ItemCount": item_count,
+            "Resources": [
+                "Images.Primary.Medium",
+                "ItemInfo.Title",
+                "Offers.Listings.Price",
+                "Offers.Listings.SavingBasis"
+            ]
+        })
+
+        headers = self.sign(payload)
+        try:
+            response = requests.post(self.endpoint, data=payload, headers=headers)
+            if response.status_code != 200:
+                logging.error(f"Amazon API error: {response.status_code} - {response.text}")
+                return []
+            data = response.json()
+            if "SearchResult" not in data or "Items" not in data["SearchResult"]:
+                return []
+            return data["SearchResult"]["Items"]
+        except Exception as e:
+            logging.error(f"Errore nella richiesta Amazon API: {e}")
+            return []
