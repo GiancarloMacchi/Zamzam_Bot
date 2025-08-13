@@ -2,6 +2,8 @@ name: Run Amazon Bot
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"  # ogni 6 ore
 
 jobs:
   run-bot:
@@ -14,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -22,7 +24,6 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run bot
-        run: python main.py
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
@@ -30,16 +31,20 @@ jobs:
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
           MIN_SAVE: ${{ secrets.MIN_SAVE }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
+        run: python main.py
 
-      - name: Upload debug files
+      - name: Upload debug file
         uses: actions/upload-artifact@v3
         with:
-          name: amazon-debug-files
-          path: |
-            amazon_debug.json
-            amazon_raw_response.json
+          name: amazon_debug
+          path: amazon_debug.json
+
+      - name: Upload raw API response
+        uses: actions/upload-artifact@v3
+        with:
+          name: amazon_raw_response
+          path: amazon_raw_response.json
