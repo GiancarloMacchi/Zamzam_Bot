@@ -1,34 +1,36 @@
-# telegram_bot.py
-import os
 from telegram import Bot
 from telegram.error import TelegramError
+from PIL import Image
+import io
+import requests
+import logging
 
-try:
-    from PIL import Image
-except ImportError:
-    Image = None  # Pillow non disponibile
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
-
-def send_telegram_message(message, image_path=None):
+def send_telegram_message(token, chat_id, text, image_url=None):
+    bot = Bot(token=token)
     try:
-        if image_path and os.path.exists(image_path):
-            if Image:
-                try:
-                    with Image.open(image_path) as img:
-                        img.verify()  # Verifica immagine valida
-                except Exception as e:
-                    print(f"[AVVISO] Immagine non valida ({e}), invio solo testo.")
-                    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-                    return
-            with open(image_path, "rb") as img_file:
-                bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=img_file, caption=message)
+        if image_url:
+            # Scarica l'immagine
+            response = requests.get(image_url, timeout=10)
+            response.raise_for_status()
+
+            # Carica con Pillow per validazione
+            image = Image.open(io.BytesIO(response.content))
+            image.verify()  # Verifica integrità dell'immagine
+
+            # Reinvia in formato corretto
+            image = Image.open(io.BytesIO(response.content))
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format=image.format)
+            img_byte_arr.seek(0)
+
+            bot.send_photo(chat_id=chat_id, photo=img_byte_arr, caption=text)
         else:
-            bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except TelegramError as e:
-        print(f"[ERRORE TELEGRAM] {e}")
-    except Exception as e:
-        print(f"[ERRORE GENERICO] {e}")
+            bot.send_message(chat_id=chat_id, text=text)
+
+        logger.info("Messaggio inviato con successo a Telegram.")
+
+    except (TelegramError, requests.RequestException, IOError) as e:
+        logger.error(f"Errore nell'invio del messaggio Telegram: {e}")
