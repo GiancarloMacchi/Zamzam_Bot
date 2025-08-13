@@ -5,6 +5,7 @@ cachetools==4.2.2
 certifi==2025.8.3
 charset-normalizer==3.4.3
 idna==3.10
+pillow==11.3.0
 python-amazon-paapi @ git+https://github.com/sergioteula/python-amazon-paapi.git@4d088f209440923e897366eac6eb7689244fe550
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
@@ -18,4 +19,3 @@ tornado==6.1
 typing_extensions==4.14.1
 tzlocal==5.3.1
 urllib3==2.5.0
-Pillow
