@@ -2,6 +2,7 @@ import logging
 from amazon_client import get_items
 from telegram_bot import send_to_telegram
 
+# Configurazione logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,9 @@ def main():
         logger.info("ℹ️ Nessun articolo trovato.")
         return
 
-    logger.info(f"✅ {len(items)} articoli trovati, invio a Telegram...")
-    for item in items:
-        send_to_telegram(item)
+    logger.info(f"✅ Trovati {len(items)} articoli, invio a Telegram...")
+    send_to_telegram(items)
+    logger.info("✅ Invio completato.")
 
 if __name__ == "__main__":
     main()
