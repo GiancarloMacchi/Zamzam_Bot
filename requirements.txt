@@ -3,5 +3,5 @@ beautifulsoup4>=4.12.2
 bitlyshortener==0.6.0
 git+https://github.com/sergioteula/python-amazon-paapi.git@master
 python-telegram-bot==13.15
-python-amazon-paapi==5.0.0
 requests==2.32.3
+paapi5-python-sdk
