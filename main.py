@@ -1,21 +1,26 @@
 import os
 from dotenv import load_dotenv
-from amazon_client import get_items
 from telegram import Bot
+from amazon_client import get_items
 
+# Carica variabili d'ambiente
 load_dotenv()
 
-bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def send_message(message):
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    bot.send_message(chat_id=chat_id, text=message)
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+def send_message(text):
+    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=text, parse_mode="HTML", disable_notification=True)
 
 if __name__ == "__main__":
-    keywords = os.getenv("KEYWORDS").split(",")
-    item_count = int(os.getenv("ITEM_COUNT"))
-
-    for keyword in keywords:
-        products = get_items(keyword.strip(), item_count)
-        for p in products:
-            send_message(f"{p.title} - {p.detail_page_url}")
+    try:
+        items = get_items()
+        if items:
+            for item in items:
+                send_message(item)
+        else:
+            send_message("Nessun prodotto trovato oggi 🚫")
+    except Exception as e:
+        send_message(f"Errore nell'esecuzione del bot: {str(e)}")
