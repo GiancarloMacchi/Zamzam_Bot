@@ -1,20 +1,20 @@
 import logging
-import os
-from telegram import Bot
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+import requests
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("telegram_bot")
 
-def send_telegram_message(message):
+def send_telegram_message(bot_token, chat_id, text):
     try:
-        bot = Bot(token=TELEGRAM_TOKEN)
-        bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="HTML")
-        logger.info("Messaggio inviato con successo a Telegram.")
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False
+        }
+        resp = requests.post(url, data=payload)
+        resp.raise_for_status()
+        logger.info("✅ Messaggio inviato con successo a Telegram.")
     except Exception as e:
-        logger.error(f"Errore nell'invio del messaggio Telegram: {e}")
+        logger.error(f"❌ Errore inviando messaggio Telegram: {e}")
