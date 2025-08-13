@@ -1,5 +1,4 @@
-bottlenose
-python-telegram-bot==13.15
-python-dotenv
 requests
+python-dotenv
+bottlenose
 Pillow
