@@ -1,25 +1,26 @@
-import requests
 import os
+import requests
 
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-class TelegramBot:
-    def __init__(self):
-        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        if not self.token or not self.chat_id:
-            raise ValueError("TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID devono essere impostati come variabili d'ambiente.")
+def send_telegram_message(text, image_url=None):
+    base_url = f"https://api.telegram.org/bot{TOKEN}"
 
-    def send_message(self, text):
-        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        payload = {
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": False
+    if image_url:
+        data = {
+            "chat_id": CHAT_ID,
+            "caption": text,
+            "parse_mode": "HTML"
         }
-
-        response = requests.post(url, json=payload)
-        if response.status_code != 200:
-            raise Exception(f"Errore nell'invio del messaggio: {response.text}")
-
-        return response.json()
+        files = {
+            "photo": requests.get(image_url, stream=True).raw
+        }
+        requests.post(f"{base_url}/sendPhoto", data=data, files=files)
+    else:
+        data = {
+            "chat_id": CHAT_ID,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        requests.post(f"{base_url}/sendMessage", data=data)
