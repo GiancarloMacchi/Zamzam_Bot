@@ -1,32 +1,45 @@
 import os
 import logging
 from dotenv import load_dotenv
-from telegram import Bot
+from telegram.ext import Updater, CommandHandler
 from amazon_client import get_items
 
-# Carica variabili d'ambiente
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+KEYWORDS = os.getenv("KEYWORDS", "offerte").split(",")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
 
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-def send_offer_to_telegram(message):
-    bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message, parse_mode="HTML")
+def start(update, context):
+    update.message.reply_text("Ciao! Ti invierò le migliori offerte Amazon 😉")
+
+
+def send_offers(update, context):
+    for keyword in KEYWORDS:
+        products = get_items(keyword, ITEM_COUNT, MIN_SAVE)
+        if not products:
+            update.message.reply_text(f"Nessuna offerta trovata per '{keyword}'.")
+            continue
+        for product in products:
+            message = f"**{product['title']}**\nPrezzo: {product['price']}\n{product['url']}"
+            update.message.reply_text(message, parse_mode="Markdown")
+
 
 if __name__ == "__main__":
-    # Esempio: prendi un prodotto specifico da Amazon
-    asin_list = ["B09G9FPHY1"]  # esempio ASIN
-    amazon_response = get_items(asin_list)
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    if amazon_response and amazon_response.items_result:
-        for item in amazon_response.items_result.items:
-            title = item.item_info.title.display_value
-            price = item.offers.listings[0].price.display_amount
-            message = f"🔥 <b>{title}</b>\n💰 Prezzo: {price}"
-            send_offer_to_telegram(message)
-    else:
-        logging.error("Nessun risultato trovato su Amazon.")
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("offers", send_offers))
+
+    logging.info("🤖 Bot avviato...")
+    updater.start_polling()
+    updater.idle()
