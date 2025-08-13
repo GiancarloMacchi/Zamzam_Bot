@@ -1,31 +1,31 @@
-import os
 import logging
-from dotenv import load_dotenv
-from amazon_client import get_items
+from amazon_client import get_items, KEYWORDS, BATCH_SIZE
 from telegram_bot import send_to_telegram
 
-load_dotenv()
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
+# Configurazione logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
-def main():
+if __name__ == "__main__":
     logger.info("🔍 Recupero articoli da Amazon...")
 
-    keywords = os.getenv("KEYWORDS", "")
-    if not keywords:
-        logger.error("❌ Nessuna keyword trovata. Imposta la variabile KEYWORDS.")
-        return
+    # Mostra batch di keyword usate in questo run
+    if len(KEYWORDS) > BATCH_SIZE:
+        logger.info(
+            f"📦 Batch keyword attuale: {KEYWORDS[:BATCH_SIZE]} "
+            f"(su {len(KEYWORDS)} totali)"
+        )
+    else:
+        logger.info(f"📦 Keyword usate: {KEYWORDS}")
 
-    items = get_items(keywords)
+    items = get_items()
 
-    if not items:
+    if items:
+        logger.info(f"✅ {len(items)} articoli trovati, invio a Telegram...")
+        for item in items:
+            send_to_telegram(item)
+    else:
         logger.info("ℹ️ Nessun articolo trovato.")
-        return
-
-    for item in items:
-        # telegram_bot si aspetta 'title' e 'link'
-        send_to_telegram(item)
-
-if __name__ == "__main__":
-    main()
