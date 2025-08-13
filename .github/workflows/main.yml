@@ -25,25 +25,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Export dependencies
-      run: |
-        pip freeze > requirements.txt
-        pip freeze > pip_freeze.txt
-
-    - name: Commit updated requirements.txt
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add requirements.txt
-        git commit -m "Update requirements.txt [skip ci]" || echo "No changes to commit"
-        git push
-
-    - name: Upload dependency artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dependency-files
-        path: pip_freeze.txt
-
     - name: Run bot
       run: python main.py
       env:
@@ -58,3 +39,25 @@ jobs:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         RUN_ONCE: ${{ secrets.RUN_ONCE }}
+
+    - name: Export dependencies
+      if: success()
+      run: |
+        pip freeze > requirements.txt
+        pip freeze > pip_freeze.txt
+
+    - name: Commit updated requirements.txt
+      if: success()
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add requirements.txt
+        git commit -m "Update requirements.txt [skip ci]" || echo "No changes to commit"
+        git push
+
+    - name: Upload dependency artifacts
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-files
+        path: pip_freeze.txt
