@@ -32,23 +32,39 @@ def get_items():
     messages = []
 
     for item in search_result.items:
-        title = item.title
-        url = item.detail_page_url
-        price = item.list_price.display_price if item.list_price else "N/D"
-        offer_price = item.offer_price.display_price if item.offer_price else "N/D"
-        save = 0
+        try:
+            title = item.item_info.title.display_value
+        except AttributeError:
+            title = "Titolo non disponibile"
 
-        if item.list_price and item.offer_price:
+        url = getattr(item, "detail_page_url", "URL non disponibile")
+
+        try:
+            # Prezzo di listino e offerta
+            listing = item.offers.listings[0]
+            list_price_amount = float(listing.price.amount)
+            list_price_display = listing.price.display_amount
+        except Exception:
+            list_price_amount = None
+            list_price_display = "N/D"
+
+        try:
+            offer_price_amount = float(listing.price.amount)
+            offer_price_display = listing.price.display_amount
+        except Exception:
+            offer_price_amount = None
+            offer_price_display = "N/D"
+
+        save = 0
+        if list_price_amount and offer_price_amount:
             try:
-                list_val = float(item.list_price.amount)
-                offer_val = float(item.offer_price.amount)
-                save = int(((list_val - offer_val) / list_val) * 100)
-            except Exception as e:
-                print(f"⚠️ Errore calcolo sconto per {title}: {e}")
+                save = int(((list_price_amount - offer_price_amount) / list_price_amount) * 100)
+            except Exception:
+                pass
 
         if save >= MIN_SAVE:
             messages.append(
-                f"<b>{title}</b>\n💰 {offer_price} (Risparmio: {save}%)\n🔗 {url}"
+                f"<b>{title}</b>\n💰 {offer_price_display} (Risparmio: {save}%)\n🔗 {url}"
             )
 
     return messages
