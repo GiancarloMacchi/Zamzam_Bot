@@ -1,5 +1,6 @@
 import os
 import json
+import requests
 from amazon_paapi import AmazonApi
 from dotenv import load_dotenv
 
@@ -15,7 +16,6 @@ MIN_SAVE = int(os.getenv("MIN_SAVE", 30))
 
 amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
 
-
 def get_items():
     try:
         results = amazon.search_items(
@@ -23,22 +23,22 @@ def get_items():
             item_count=ITEM_COUNT
         )
 
-        # Salva sempre la risposta, anche se è un errore
+        # Salva la risposta completa per debug
         with open("amazon_debug.json", "w", encoding="utf-8") as f:
             json.dump(results.to_dict(), f, ensure_ascii=False, indent=2)
 
         items_list = []
         for item in results.items:
             try:
-                title = item["ItemInfo"]["Title"]["DisplayValue"]
-                price_info = item["Offers"]["Listings"][0]["Price"]
-                price = price_info["Amount"]
-                currency = price_info["Currency"]
+                title = item.item_info.title.display_value
+                price_info = item.offers.listings[0].price
+                price = price_info.amount
+                currency = price_info.currency
                 saving = 0
-                if "Savings" in price_info:
-                    saving = price_info["Savings"].get("Percentage", 0)
+                if hasattr(price_info, "savings") and price_info.savings:
+                    saving = price_info.savings.percentage
 
-                url = item["DetailPageURL"]
+                url = item.detail_page_url
 
                 if saving >= MIN_SAVE:
                     items_list.append({
@@ -49,7 +49,7 @@ def get_items():
                         "url": url
                     })
             except Exception as e:
-                print(f"Errore nel parsing di un articolo: {e}")
+                print(f"⚠️ Errore nel parsing di un articolo: {e}")
                 continue
 
         return items_list
@@ -58,8 +58,13 @@ def get_items():
         print("❌ Errore durante il recupero degli articoli da Amazon API:")
         print(e)
 
-        # Log anche l'errore in JSON
-        with open("amazon_debug.json", "w", encoding="utf-8") as f:
-            json.dump({"error": str(e)}, f, ensure_ascii=False, indent=2)
+        # Salvataggio risposta raw in caso di errore
+        try:
+            if hasattr(e, "response") and hasattr(e.response, "text"):
+                with open("amazon_error.json", "w", encoding="utf-8") as f:
+                    f.write(e.response.text)
+                print("📄 Risposta di errore salvata in amazon_error.json")
+        except Exception as save_err:
+            print(f"⚠️ Impossibile salvare l'errore: {save_err}")
 
         return []
