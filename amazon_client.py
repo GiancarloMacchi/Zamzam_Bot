@@ -1,46 +1,49 @@
 import os
-import json
+import logging
 from amazon_paapi import AmazonApi
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("amazon_client")
 
 ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 COUNTRY = os.getenv("AMAZON_COUNTRY")
 KEYWORDS = os.getenv("KEYWORDS")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-MIN_SAVE = int(os.getenv("MIN_SAVE", 30))
-
-amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 3))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
 
 def get_items():
     try:
-        results = amazon.search_items(
+        amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+        logger.info(f"🔍 Chiamata Amazon API con keyword: {KEYWORDS}")
+
+        response = amazon.search_items(
             keywords=KEYWORDS,
-            item_count=ITEM_COUNT
+            item_count=ITEM_COUNT,
+            resources=[
+                "ItemInfo.Title",
+                "Offers.Listings.Price",
+                "Offers.Listings.SavingBasis",
+                "Images.Primary.Medium"
+            ]
         )
 
-        # Salva risposta per debug
-        with open("amazon_debug.json", "w", encoding="utf-8") as f:
-            json.dump(results.to_dict(), f, ensure_ascii=False, indent=2)
-
-        items_list = []
-        for item in results.items:
+        items = []
+        for item in response.search_result.items:
             try:
                 title = item.item_info.title.display_value
-                price_info = item.offers.listings[0].price
-                price = price_info.amount
-                currency = price_info.currency
-                saving = 0
-                if item.offers.listings[0].price.savings:
-                    saving = item.offers.listings[0].price.savings.percentage
-
+                price = item.offers.listings[0].price.amount
+                currency = item.offers.listings[0].price.currency
+                saving_basis = item.offers.listings[0].saving_basis.amount if item.offers.listings[0].saving_basis else price
+                saving = round(((saving_basis - price) / saving_basis) * 100, 2) if saving_basis else 0
                 url = item.detail_page_url
 
                 if saving >= MIN_SAVE:
-                    items_list.append({
+                    items.append({
                         "title": title,
                         "price": price,
                         "currency": currency,
@@ -48,12 +51,10 @@ def get_items():
                         "url": url
                     })
             except Exception as e:
-                print(f"Errore nel parsing di un articolo: {e}")
-                continue
+                logger.warning(f"Errore elaborando un articolo: {e}")
 
-        return items_list
+        return items
 
     except Exception as e:
-        print("❌ Errore durante il recupero degli articoli da Amazon API:")
-        print(e)
+        logger.error(f"❌ Errore durante il recupero degli articoli da Amazon API:\n{e}")
         return []
