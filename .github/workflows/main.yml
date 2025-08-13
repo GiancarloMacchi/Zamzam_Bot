@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # permette di farlo partire manualmente
+  workflow_dispatch: # Avvio manuale
 
 jobs:
   build:
@@ -22,9 +22,13 @@ jobs:
       - name: Upgrade pip
         run: pip install --upgrade pip
 
-      - name: Install dependencies
+      - name: Install dependencies from requirements.txt
         run: |
           pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir python-dotenv beautifulsoup4 requests bitlyshortener
+
+      - name: Show installed packages
+        run: pip list
 
       - name: Run bot
         env:
