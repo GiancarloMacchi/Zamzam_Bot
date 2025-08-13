@@ -1,4 +1,4 @@
-requests
-python-dotenv
-bottlenose
-Pillow
+python-dotenv>=1.0.0
+requests==2.32.3
+Pillow>=10.0.0
+git+https://github.com/sergioteula/python-amazon-paapi.git@4d088f209440923e897366eac6eb7689244fe550
