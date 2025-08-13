@@ -1,84 +1,77 @@
 import os
+import json
 import logging
 from amazon_paapi import AmazonAPI
-import json
+from datetime import datetime
 
-# Configurazione logging
+# Configurazione logger
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# Carica variabili ambiente
-ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+# Credenziali Amazon dal repository secrets
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
+# Parametri bot
+KEYWORDS = [kw.strip() for kw in os.getenv("KEYWORDS", "").split(",") if kw.strip()]
 ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-KEYWORDS = [k.strip() for k in os.getenv("KEYWORDS", "").split(",") if k.strip()]
 MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
+BATCH_SIZE = 10  # batch di keyword per evitare throttling
 
-# Lista di risorse richieste all'API
+# Risorse da richiedere alle API Amazon
 RESOURCES = [
     "Images.Primary.Large",
     "ItemInfo.Title",
     "Offers.Listings.Price",
     "Offers.Listings.SavingBasis",
-    "Offers.Listings.Savings"
+    "Offers.Listings.Promotions",
 ]
 
-# Inizializza API client
-api = AmazonAPI(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+amazon_api = AmazonAPI(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
 
 
-def get_items():
+def get_items(keyword):
+    logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword.upper()}")
+    try:
+        # Chiamata API Amazon
+        results = amazon_api.search_items(
+            keywords=keyword,
+            item_count=ITEM_COUNT,
+            resources=RESOURCES
+        )
+
+        items_data = []
+        for item in results:
+            # Se è già un dict, lo usiamo direttamente
+            if isinstance(item, dict):
+                items_data.append(item)
+            else:
+                # Altrimenti proviamo a convertirlo
+                if hasattr(item, "to_dict"):
+                    items_data.append(item.to_dict())
+                else:
+                    logger.warning(f"Elemento senza to_dict(): {item}")
+
+        # Salvataggio debug locale
+        with open("amazon_debug.json", "w", encoding="utf-8") as f:
+            json.dump(items_data, f, ensure_ascii=False, indent=2)
+
+        return items_data
+
+    except Exception as e:
+        logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
+        return []
+
+
+if __name__ == "__main__":
     all_items = []
-    raw_responses = []
-
-    for keyword in KEYWORDS:
-        logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
-
-        try:
-            items = api.search_items(
-                keywords=keyword,
-                item_count=ITEM_COUNT,
-                resources=RESOURCES
-            )
-            raw_responses.append({keyword: items.to_dict()})
-
-            if not items.items:
-                continue
-
-            for item in items.items:
-                try:
-                    title = item.item_info.title.display_value
-                    price = item.offers.listings[0].price.amount
-                    saving_basis = item.offers.listings[0].saving_basis.amount if item.offers.listings[0].saving_basis else None
-                    savings = item.offers.listings[0].savings.amount if item.offers.listings[0].savings else None
-                    url = item.detail_page_url
-                    image = item.images.primary.large.url if item.images and item.images.primary and item.images.primary.large else None
-
-                    if saving_basis and savings:
-                        discount_percent = round((savings / saving_basis) * 100, 2)
-                        if discount_percent < MIN_SAVE:
-                            continue
-                    else:
-                        discount_percent = 0
-
-                    all_items.append({
-                        "title": title,
-                        "price": price,
-                        "url": url,
-                        "image": image,
-                        "discount_percent": discount_percent
-                    })
-                except Exception as e:
-                    logger.error(f"❌ Errore parsing articolo: {e}")
-
-        except Exception as e:
-            logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
-
-    # Salvataggio risposta grezza per debug
-    with open("amazon_debug.json", "w", encoding="utf-8") as f:
-        json.dump(raw_responses, f, indent=2, ensure_ascii=False)
-    logger.info("💾 amazon_debug.json salvato con le risposte grezze di Amazon")
-
-    return all_items
+    for kw in KEYWORDS:
+        all_items.extend(get_items(kw))
+    logger.info(f"Totale articoli trovati: {len(all_items)}")
