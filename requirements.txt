@@ -1,4 +1,3 @@
 bottlenose
-requests
 python-telegram-bot==13.15
-Pillow
+python-dotenv
