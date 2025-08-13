@@ -1,0 +1,42 @@
+name: Update Requirements
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Ogni giorno alle 02:00
+  workflow_dispatch: # Avvio manuale
+
+jobs:
+  update-requirements:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Upgrade pip
+        run: pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Aggiorna requirements.txt
+        run: |
+          pip install --upgrade -r requirements.txt
+          pip freeze > requirements.txt
+
+      - name: Salva elenco pacchetti (pip_freeze.txt)
+        run: pip freeze > pip_freeze.txt
+
+      - name: Commit e push modifiche
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add requirements.txt pip_freeze.txt
+          git commit -m "Aggiornamento automatico pacchetti" || echo "Nessuna modifica da committare"
+          git push
