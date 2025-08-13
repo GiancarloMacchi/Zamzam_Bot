@@ -1,130 +1,74 @@
 import os
 import json
-import random
 import time
-import logging
-from amazon_paapi import AmazonApi
-from telegram import Bot
+import random
+from amazon_api import AmazonApi
+from telegram_api import TelegramBot
 
-# ===================== CONFIGURAZIONE LOG =====================
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(levelname)s] %(message)s'
-)
+# Carica frasi da file
+with open("phrases.json", "r", encoding="utf-8") as f:
+    phrases_data = json.load(f)
 
-# ===================== LETTURA VARIABILI AMBIENTE =====================
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-BITLY_TOKEN = os.getenv("BITLY_TOKEN")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
-MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
-KEYWORDS = os.getenv("KEYWORDS", "infanzia,mamma,bimbo").split(",")
+# File per evitare duplicati
+SEEN_ITEMS_FILE = ".seen_items.json"
+if os.path.exists(SEEN_ITEMS_FILE):
+    with open(SEEN_ITEMS_FILE, "r", encoding="utf-8") as f:
+        seen_items = json.load(f)
+else:
+    seen_items = []
 
-# ===================== FILE PER GESTIONE DOPPIONI =====================
-SEEN_FILE = ".seen_items.json"
+def save_seen_items():
+    with open(SEEN_ITEMS_FILE, "w", encoding="utf-8") as f:
+        json.dump(seen_items, f)
 
-if not os.path.exists(SEEN_FILE):
-    with open(SEEN_FILE, "w") as f:
-        json.dump([], f)
+# Carica variabili ambiente da GitHub secrets
+amazon_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
+amazon_country = os.getenv("AMAZON_COUNTRY", "IT")
+amazon_key = os.getenv("AMAZON_ACCESS_KEY")
+amazon_secret = os.getenv("AMAZON_SECRET_KEY")
+item_count = int(os.getenv("ITEM_COUNT", 10))
+min_save = int(os.getenv("MIN_SAVE", 20))
+keywords = os.getenv("KEYWORDS", "").split(",")
 
-with open(SEEN_FILE, "r") as f:
-    seen_items = set(json.load(f))
+telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
-# ===================== FRASE IRONICA PER KEYWORD =====================
-PHRASES = {
-    "infanzia": [
-        "Per i piccoli di casa... o per i grandi con un cuore bambino 💖",
-        "Se l'infanzia fosse uno sconto, sarebbe questo 😍",
-        "Piccoli prezzi per piccoli grandi sorrisi 👶"
-    ],
-    "mamma": [
-        "Per tutte le mamme multitasking 🦸‍♀️",
-        "Perché le mamme meritano sempre il meglio ❤️",
-        "Coccole e risparmio: combo perfetta per le mamme!"
-    ],
-    "bimbo": [
-        "Il sorriso di un bimbo non ha prezzo... ma questo sconto aiuta 😁",
-        "Regala ai bimbi momenti speciali 🎁",
-        "Perché ogni bimbo merita qualcosa di bello 🍼"
-    ]
-}
+# Inizializza API
+amazon_api = AmazonApi(amazon_key, amazon_secret, amazon_tag, amazon_country)
+telegram_bot = TelegramBot(telegram_token, telegram_chat_id)
 
-# ===================== FUNZIONI =====================
-def get_amazon_client():
-    return AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+print(f"[INFO] 🚀 Avvio bot Amazon - Partner tag: {amazon_tag}")
 
-def shorten_url(url):
-    if not BITLY_TOKEN:
-        return url
-    import requests
-    try:
-        headers = {"Authorization": f"Bearer {BITLY_TOKEN}", "Content-Type": "application/json"}
-        data = {"long_url": url}
-        r = requests.post("https://api-ssl.bitly.com/v4/shorten", headers=headers, json=data)
-        return r.json().get("link", url)
-    except Exception as e:
-        logging.error(f"[ERRORE Bitly] {e}")
-        return url
+for keyword in keywords:
+    keyword = keyword.strip()
+    print(f"[INFO] 🔍 Ricerca per: {keyword}")
 
-def save_seen():
-    with open(SEEN_FILE, "w") as f:
-        json.dump(list(seen_items), f)
+    results = amazon_api.search_items(
+        keyword=keyword,
+        item_count=item_count,
+        min_save=min_save
+    )
 
-def get_random_phrase(keyword):
-    if keyword in PHRASES:
-        return random.choice(PHRASES[keyword])
-    return "Ecco un'offerta imperdibile 🤩"
+    if not results:
+        print(f"[WARN] Nessun risultato per '{keyword}'")
+        continue
 
-def post_to_telegram(bot, title, url, image, phrase):
-    text = f"{phrase}\n\n<b>{title}</b>\n{url}"
-    bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=image, caption=text, parse_mode="HTML")
+    for item in results:
+        if item['asin'] in seen_items:
+            continue
 
-# ===================== MAIN =====================
-def main():
-    logging.info(f"🚀 Avvio bot Amazon - Partner tag: {AMAZON_ASSOCIATE_TAG}")
+        # Aggiunge frase casuale legata alla keyword
+        phrase = random.choice(phrases_data.get(keyword, ["Ecco un affare che non puoi perdere!"]))
+        
+        caption = f"{phrase}\n\n{item['title']}\n💰 Prezzo: {item['price']}€\n💸 Sconto: {item['save_percent']}%\n🔗 {item['url']}"
+        
+        telegram_bot.send_photo(item['image'], caption)
+        seen_items.append(item['asin'])
+        save_seen_items()
 
-    amazon = get_amazon_client()
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        # Delay casuale tra post per sembrare più naturale
+        delay = random.randint(30, 90)
+        print(f"[INFO] ⏳ Attendo {delay} secondi prima del prossimo post...")
+        time.sleep(delay)
 
-    for keyword in KEYWORDS:
-        logging.info(f"🔍 Ricerca per: {keyword}")
-        try:
-            results = amazon.search_items(
-                keywords=keyword,
-                item_count=ITEM_COUNT
-            )
-
-            for item in results:
-                asin = item.asin
-                if asin in seen_items:
-                    continue
-
-                if not item.list_price or not item.offer_price:
-                    continue
-
-                save_percent = ((item.list_price - item.offer_price) / item.list_price) * 100
-                if save_percent < MIN_SAVE:
-                    continue
-
-                url = shorten_url(item.detail_page_url)
-                phrase = get_random_phrase(keyword)
-                post_to_telegram(bot, item.title, url, item.image, phrase)
-
-                seen_items.add(asin)
-                save_seen()
-
-                delay = random.randint(30, 90)
-                logging.info(f"⏳ Attendo {delay} sec prima del prossimo post...")
-                time.sleep(delay)
-
-        except Exception as e:
-            logging.error(f"[ERRORE Amazon] ricerca '{keyword}': {e}")
-
-    logging.info("✅ Bot completato")
-
-if __name__ == "__main__":
-    main()
+print("[INFO] ✅ Bot completato")
