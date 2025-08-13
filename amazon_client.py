@@ -13,33 +13,18 @@ KEYWORDS = os.getenv("KEYWORDS")
 ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
 MIN_SAVE = int(os.getenv("MIN_SAVE", 30))
 
-print("\n=== DEBUG AMAZON CONFIG ===")
-print(f"ACCESS_KEY: {ACCESS_KEY[:4]}... (lunghezza {len(ACCESS_KEY)})")
-print(f"SECRET_KEY: {SECRET_KEY[:4]}... (lunghezza {len(SECRET_KEY)})")
-print(f"ASSOCIATE_TAG: {ASSOCIATE_TAG}")
-print(f"COUNTRY: {COUNTRY}")
-print(f"KEYWORDS: {KEYWORDS}")
-print(f"ITEM_COUNT: {ITEM_COUNT}")
-print(f"MIN_SAVE: {MIN_SAVE}")
-print("===========================\n")
-
 amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
-
 
 def get_items():
     try:
-        print(f"🔍 Chiamata Amazon API con keyword: {KEYWORDS}")
         results = amazon.search_items(
             keywords=KEYWORDS,
             item_count=ITEM_COUNT
         )
 
-        # Salva la risposta completa per debug
-        raw_response = results.to_dict()
+        # Salva risposta per debug
         with open("amazon_debug.json", "w", encoding="utf-8") as f:
-            json.dump(raw_response, f, ensure_ascii=False, indent=2)
-
-        print("📄 Risposta grezza Amazon salvata in amazon_debug.json")
+            json.dump(results.to_dict(), f, ensure_ascii=False, indent=2)
 
         items_list = []
         for item in results.items:
