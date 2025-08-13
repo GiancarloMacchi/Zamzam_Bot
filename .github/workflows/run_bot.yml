@@ -2,13 +2,12 @@ name: Amazon Deals Bot
 
 on:
   schedule:
-    - cron: "0 */6 * * *" # Ogni 6 ore
-  workflow_dispatch: # Avvio manuale
+    - cron: "0 */6 * * *" # ogni 6 ore
+  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -17,12 +16,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # Installa tutte le dipendenze tranne amazon-paapi (ora è locale)
+          grep -v "^amazon-paapi" requirements.txt > req.txt
+          pip install -r req.txt
 
       - name: Run bot
         env:
@@ -36,12 +36,4 @@ jobs:
           MIN_SAVE: ${{ secrets.MIN_SAVE }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: python main.py
-
-      - name: Upload debug JSON
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: amazon_debug
-          path: amazon_debug.json
