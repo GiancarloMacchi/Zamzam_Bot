@@ -9,8 +9,11 @@ def main():
     all_items = []
 
     for keyword in KEYWORDS:
-        items = get_items(keyword)
-        all_items.extend(items)
+        try:
+            items = get_items(keyword)
+            all_items.extend(items)
+        except Exception as e:
+            logger.error(f"❌ Errore durante il recupero per '{keyword}': {e}")
 
     if all_items:
         logger.info(f"✅ Trovati {len(all_items)} articoli in totale.")
