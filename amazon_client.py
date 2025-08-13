@@ -1,71 +1,75 @@
+import os
 import json
-import bottlenose
-from bs4 import BeautifulSoup
-import requests
+from amazon_paapi import AmazonApi
+from dotenv import load_dotenv
 
-class AmazonClient:
-    def __init__(self, access_key, secret_key, associate_tag, region="IT"):
-        self.client = bottlenose.Amazon(
-            AWSAccessKeyId=access_key,
-            AWSSecretAccessKey=secret_key,
-            AssociateTag=associate_tag,
-            Region=region
-        )
+load_dotenv()
 
-    def get_items(self, keywords, item_count=10, min_save=0):
+# Variabili ambiente
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
+KEYWORDS = os.getenv("KEYWORDS", "")
+MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
+
+# Inizializza Amazon API
+amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+
+def get_items():
+    # Chiamata API
+    results = amazon.search_items(keywords=KEYWORDS, item_count=ITEM_COUNT)
+
+    # Salva la risposta raw in JSON
+    try:
+        with open("amazon_raw_response.json", "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[DEBUG] Errore salvataggio amazon_raw_response.json: {e}")
+
+    messages = []
+    debug_data = []
+
+    # Itera sugli articoli
+    for item in results.items:
         try:
-            response = self.client.ItemSearch(
-                Keywords=keywords,
-                SearchIndex="All",
-                ResponseGroup="Large",
-                ItemPage=1
-            )
+            title = getattr(item, "title", "N/D")
+            url = getattr(item, "detail_page_url", "N/D")
+            price = getattr(item, "list_price", None)
+            offer_price = getattr(item, "offer_price", None)
 
-            # Convert response to dict if needed
-            if hasattr(response, "to_json"):
-                raw_json = json.loads(response.to_json())
-            elif isinstance(response, str):
-                raw_json = json.loads(response)
-            else:
-                raw_json = response
+            price_display = price.display_price if price else "N/D"
+            offer_display = offer_price.display_price if offer_price else "N/D"
 
-            # 💾 Salva risposta grezza
-            with open("amazon_raw_response.json", "w", encoding="utf-8") as raw_file:
-                json.dump(raw_json, raw_file, ensure_ascii=False, indent=4)
-            print("💾 File amazon_raw_response.json salvato (risposta grezza Amazon API).")
-
-            # Parsing XML
-            soup = BeautifulSoup(response, "xml")
-            items = []
-
-            for item in soup.find_all("Item")[:item_count]:
+            save = 0
+            if price and offer_price:
                 try:
-                    title = item.Title.text if item.Title else "No title"
-                    url = item.DetailPageURL.text if item.DetailPageURL else ""
-                    price = None
-                    savings = 0
+                    list_val = float(price.amount)
+                    offer_val = float(offer_price.amount)
+                    save = int(((list_val - offer_val) / list_val) * 100)
+                except Exception:
+                    pass
 
-                    if item.ListPrice and item.ListPrice.Amount:
-                        price = int(item.ListPrice.Amount.text) / 100
+            debug_data.append({
+                "title": title,
+                "url": url,
+                "list_price": price_display,
+                "offer_price": offer_display,
+                "save_percent": save
+            })
 
-                    if item.OfferSummary and item.OfferSummary.LowestNewPrice:
-                        lowest_price = int(item.OfferSummary.LowestNewPrice.Amount.text) / 100
-                        if price:
-                            savings = round(((price - lowest_price) / price) * 100, 2)
-                        price = lowest_price
-
-                    if savings >= min_save:
-                        items.append({
-                            "title": title,
-                            "url": url,
-                            "price": price,
-                            "savings": savings
-                        })
-                except Exception as e:
-                    print(f"Errore parsing item: {e}")
-
-            return items
+            if save >= MIN_SAVE:
+                messages.append(f"<b>{title}</b>\n💰 {offer_display} (Risparmio: {save}%)\n🔗 {url}")
 
         except Exception as e:
-            print(f"Errore nella richiesta Amazon API: {e}")
-            return []
+            print(f"[DEBUG] Errore elaborando un articolo: {e}")
+
+    # Salva file debug
+    try:
+        with open("amazon_debug.json", "w", encoding="utf-8") as f:
+            json.dump(debug_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[DEBUG] Errore salvataggio amazon_debug.json: {e}")
+
+    return messages
