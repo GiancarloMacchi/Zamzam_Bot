@@ -1,108 +1,93 @@
 import os
 import json
 import random
-from amazon_paapi import AmazonApi
+from datetime import datetime
+from amazon_paapi import AmazonAPI
 from telegram_api import TelegramBot
 
-# Caricamento variabili d'ambiente
+# ===== CONFIGURAZIONE =====
 AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
 AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-BITLY_TOKEN = os.getenv("BITLY_TOKEN")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
 MIN_SAVE = int(os.getenv("MIN_SAVE", 20))
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-RUN_ONCE = os.getenv("RUN_ONCE", "false").lower() == "true"
-
-# Lista di keyword
 KEYWORDS = json.loads(os.getenv("KEYWORDS", '["infanzia"]'))
 
-# File per tenere traccia degli ID già inviati
+# ===== FILE LOCALI =====
 SEEN_ITEMS_FILE = ".seen_items.json"
-
-# File frasi promozionali
 PHRASES_FILE = "phrases.json"
 
-# Carica frasi dal file
-if os.path.exists(PHRASES_FILE):
-    with open(PHRASES_FILE, "r", encoding="utf-8") as f:
-        phrases_data = json.load(f)
-else:
-    phrases_data = {"default": ["🔥 Offerta imperdibile!", "💥 Sconto speciale solo per oggi!"]}
+# ===== INIZIALIZZAZIONE =====
+bot = TelegramBot()
+amazon_api = AmazonAPI(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
 
-# Funzione per scegliere una frase casuale
-def get_random_phrase(keyword):
-    phrases = phrases_data.get(keyword, phrases_data.get("default", []))
-    if not phrases:
-        phrases = ["🔥 Offerta imperdibile!", "💥 Sconto speciale solo per oggi!"]
-    return random.choice(phrases)
-
-# Carica gli ID già inviati
-if os.path.exists(SEEN_ITEMS_FILE):
-    with open(SEEN_ITEMS_FILE, "r", encoding="utf-8") as f:
+# ===== FUNZIONI =====
+def load_seen_items():
+    if os.path.exists(SEEN_ITEMS_FILE):
         try:
-            seen_items = json.load(f)
+            with open(SEEN_ITEMS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
         except json.JSONDecodeError:
-            seen_items = []
-else:
-    seen_items = []
+            return []
+    return []
 
-# Inizializza Amazon API
-amazon_api = AmazonApi(
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    AMAZON_COUNTRY
-)
+def save_seen_items(seen_items):
+    with open(SEEN_ITEMS_FILE, "w", encoding="utf-8") as f:
+        json.dump(seen_items, f)
 
-# Inizializza Telegram Bot
-telegram_bot = TelegramBot(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+def load_phrases():
+    if os.path.exists(PHRASES_FILE):
+        with open(PHRASES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-print(f"[INFO] 🚀 Avvio bot Amazon - Partner tag: {AMAZON_ASSOCIATE_TAG}")
+def choose_phrase(phrases, keyword):
+    if keyword in phrases:
+        return random.choice(phrases[keyword])
+    elif "default" in phrases:
+        return random.choice(phrases["default"])
+    return ""
 
-# Loop per ogni keyword
-for keyword in KEYWORDS:
-    print(f"[INFO] 🔍 Ricerca per: {keyword}")
-    try:
+# ===== MAIN =====
+if __name__ == "__main__":
+    print(f"[INFO] 🚀 Avvio bot Amazon - Partner tag: {AMAZON_ASSOCIATE_TAG}")
+
+    seen_items = load_seen_items()
+    phrases = load_phrases()
+
+    for keyword in KEYWORDS:
+        print(f"[INFO] 🔍 Ricerca per: {keyword}")
         results = amazon_api.search_items(
             keywords=keyword,
             item_count=ITEM_COUNT
         )
-    except Exception as e:
-        print(f"[ERRORE] Ricerca fallita per '{keyword}': {e}")
-        continue
 
-    for item in results:
-        asin = item.asin
-        if asin in seen_items:
-            continue  # Evita duplicati
+        for item in results:
+            asin = item.asin
+            if asin in seen_items:
+                continue
 
-        # Calcola percentuale di sconto
-        if item.list_price and item.offer_price:
-            try:
-                discount = int(((item.list_price - item.offer_price) / item.list_price) * 100)
-            except ZeroDivisionError:
+            if hasattr(item, "offers") and item.offers and item.list_price and item.offer_price:
+                discount = round((1 - (item.offer_price / item.list_price)) * 100, 2)
+            else:
                 discount = 0
-        else:
-            discount = 0
 
-        if discount >= MIN_SAVE:
-            message = f"{get_random_phrase(keyword)}\n\n" \
-                      f"📦 {item.title}\n" \
-                      f"💰 {item.offer_price}€ (sconto {discount}%)\n" \
-                      f"🔗 {item.detail_page_url}"
+            if discount < MIN_SAVE:
+                continue
 
-            telegram_bot.send_message(message)
+            phrase = choose_phrase(phrases, keyword)
+
+            message = (
+                f"{phrase}\n\n"
+                f"<b>{item.title}</b>\n"
+                f"💰 <b>Prezzo:</b> {item.offer_price}€\n"
+                f"📉 <b>Sconto:</b> {discount}%\n"
+                f"🔗 <a href='{item.detail_page_url}'>Vedi su Amazon</a>"
+            )
+
+            bot.send_message(message)
             seen_items.append(asin)
 
-# Salva ID inviati
-with open(SEEN_ITEMS_FILE, "w", encoding="utf-8") as f:
-    json.dump(seen_items, f)
-
-print("[INFO] ✅ Bot completato.")
-
-# Se RUN_ONCE è True, esce
-if RUN_ONCE:
-    exit()
+    save_seen_items(seen_items)
+    print("[INFO] ✅ Completato.")
