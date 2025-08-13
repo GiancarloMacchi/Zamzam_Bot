@@ -4,6 +4,7 @@
         "🍼 Offerta che fa felice ogni mamma (e papà)!",
         "🎁 Perfetto per i più piccoli… e per il tuo portafoglio!",
         "💡 Risparmiare oggi è un gioco da bambini!"
+        "Se avesse il portafogli, anche René lo prenderebbe subito!"
     ],
     "cucina": [
         "🍳 Sconto bollente appena sfornato!",
@@ -22,5 +23,11 @@
         "🛋️ Arreda e risparmia: offerta imperdibile!",
         "🪴 Piccoli prezzi per grandi comfort domestici!",
         "💡 La tua casa merita questo affare!"
+    ],
+    "default": [
+        "💥 Offerta imperdibile!",
+        "🎯 Prezzo mai visto prima!",
+        "⚡ Sconto lampo da non perdere!",
+        "🔥 Affrettati: occasione unica!"
     ]
 }
