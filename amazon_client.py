@@ -5,71 +5,56 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Variabili ambiente
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
-ITEM_COUNT = int(os.getenv("ITEM_COUNT", 5))
-KEYWORDS = os.getenv("KEYWORDS", "")
-MIN_SAVE = int(os.getenv("MIN_SAVE", 0))
+ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+COUNTRY = os.getenv("AMAZON_COUNTRY")
+KEYWORDS = os.getenv("KEYWORDS")
+ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+MIN_SAVE = int(os.getenv("MIN_SAVE", 30))
 
-# Inizializza Amazon API
-amazon = AmazonApi(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+
 
 def get_items():
-    # Chiamata API
-    results = amazon.search_items(keywords=KEYWORDS, item_count=ITEM_COUNT)
-
-    # Salva la risposta raw in JSON
     try:
-        with open("amazon_raw_response.json", "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[DEBUG] Errore salvataggio amazon_raw_response.json: {e}")
+        results = amazon.search_items(
+            keywords=KEYWORDS,
+            item_count=ITEM_COUNT
+        )
 
-    messages = []
-    debug_data = []
-
-    # Itera sugli articoli
-    for item in results.items:
-        try:
-            title = getattr(item, "title", "N/D")
-            url = getattr(item, "detail_page_url", "N/D")
-            price = getattr(item, "list_price", None)
-            offer_price = getattr(item, "offer_price", None)
-
-            price_display = price.display_price if price else "N/D"
-            offer_display = offer_price.display_price if offer_price else "N/D"
-
-            save = 0
-            if price and offer_price:
-                try:
-                    list_val = float(price.amount)
-                    offer_val = float(offer_price.amount)
-                    save = int(((list_val - offer_val) / list_val) * 100)
-                except Exception:
-                    pass
-
-            debug_data.append({
-                "title": title,
-                "url": url,
-                "list_price": price_display,
-                "offer_price": offer_display,
-                "save_percent": save
-            })
-
-            if save >= MIN_SAVE:
-                messages.append(f"<b>{title}</b>\n💰 {offer_display} (Risparmio: {save}%)\n🔗 {url}")
-
-        except Exception as e:
-            print(f"[DEBUG] Errore elaborando un articolo: {e}")
-
-    # Salva file debug
-    try:
+        # Salva la risposta completa per debug
         with open("amazon_debug.json", "w", encoding="utf-8") as f:
-            json.dump(debug_data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[DEBUG] Errore salvataggio amazon_debug.json: {e}")
+            json.dump(results.to_dict(), f, ensure_ascii=False, indent=2)
 
-    return messages
+        items_list = []
+        for item in results.items:
+            try:
+                title = item.item_info.title.display_value
+                price_info = item.offers.listings[0].price
+                price = price_info.amount
+                currency = price_info.currency
+                saving = 0
+                if item.offers.listings[0].price.savings:
+                    saving = item.offers.listings[0].price.savings.percentage
+
+                url = item.detail_page_url
+
+                if saving >= MIN_SAVE:
+                    items_list.append({
+                        "title": title,
+                        "price": price,
+                        "currency": currency,
+                        "saving": saving,
+                        "url": url
+                    })
+            except Exception as e:
+                print(f"Errore nel parsing di un articolo: {e}")
+                continue
+
+        return items_list
+
+    except Exception as e:
+        print("❌ Errore durante il recupero degli articoli da Amazon API:")
+        print(e)
+        return []
