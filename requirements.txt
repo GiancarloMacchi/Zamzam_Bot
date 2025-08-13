@@ -1,6 +1,5 @@
 bottlenose
-python-telegram-bot==13.15
+python-telegram-bot==13.11
 python-dotenv
 requests
 Pillow
-git+https://github.com/sergioteula/python-amazon-paapi.git
