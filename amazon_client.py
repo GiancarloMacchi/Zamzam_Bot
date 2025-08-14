@@ -28,13 +28,12 @@ def search_amazon_items(keyword, item_count=10):
     logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
 
     try:
-        # Chiamata API senza search_index
         results = amazon.search_items(
             keywords=keyword,
             item_count=item_count
         )
 
-        # Salvataggio file debug con risultati grezzi
+        # Salvataggio file debug
         debug_filename = f"amazon_debug_{keyword.replace(' ', '_')}.json"
         with open(debug_filename, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
@@ -49,3 +48,7 @@ def search_amazon_items(keyword, item_count=10):
     except Exception as e:
         logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
         return []
+
+# Alias per retrocompatibilità
+def get_items(keyword, item_count=10):
+    return search_amazon_items(keyword, item_count)
