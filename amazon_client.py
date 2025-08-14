@@ -1,57 +1,66 @@
-import os
-import json
 import logging
+import json
+import os
 from amazon_paapi import AmazonAPI
+from datetime import datetime
 
-# Logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Legge keywords dai Secrets
-keywords_str = os.getenv("KEYWORDS", "").strip()
-if not keywords_str:
-    logger.error("❌ Nessuna keyword trovata nei GitHub Secrets (KEYWORDS). Impostale in Actions -> Environment secrets.")
-    exit(1)
-
-KEYWORDS = [k.strip() for k in keywords_str.split(",") if k.strip()]
-BATCH_SIZE = 1  # o il valore che avevi prima
-
-# Configurazione Amazon API
-AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
-
-amazon = AmazonAPI(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
-
-
 def get_items(keyword):
+    amazon = AmazonAPI(
+        os.environ["AMAZON_ACCESS_KEY"],
+        os.environ["AMAZON_SECRET_KEY"],
+        os.environ["AMAZON_ASSOCIATE_TAG"],
+        country=os.environ["AMAZON_COUNTRY"]
+    )
+
     logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
+
     try:
-        results = amazon.search_items(
+        items = amazon.search_items(
             keywords=keyword,
+            search_index="All",
             resources=[
-                "Images.Primary.Medium",
+                "Images.Primary.Large",
                 "ItemInfo.Title",
                 "Offers.Listings.Price",
-                "Offers.Listings.SavingBasis"
+                "Offers.Listings.SavingBasis",
+                "Offers.Listings.SavingsPercentage",
+                "Offers.Listings.MerchantInfo"
             ]
         )
-        items = []
-        for item in results:
+
+        # items può essere lista di oggetti o dict, normalizziamo
+        raw_list = []
+        for item in items:
             try:
-                data = item.to_dict()
-                items.append(data)
+                raw_list.append(item.to_dict())
             except AttributeError:
-                logger.warning(f"⚠️ Risultato non valido per keyword '{keyword}': {item}")
-        return items
+                raw_list.append(item)
+
+        # Salvataggio debug grezzo
+        debug_file = f"amazon_debug_{keyword.replace(' ', '_')}.json"
+        with open(debug_file, "w", encoding="utf-8") as f:
+            json.dump(raw_list, f, ensure_ascii=False, indent=2)
+        logger.info(f"💾 Salvati {len(raw_list)} risultati grezzi per '{keyword}' in {debug_file}")
+
+        # Filtro sugli sconti
+        min_save = int(os.environ.get("MIN_SAVE", 0))
+        filtered = []
+        for item in raw_list:
+            try:
+                offers = item["Offers"]["Listings"]
+                for offer in offers:
+                    save_perc = offer.get("SavingsPercentage")
+                    if save_perc is not None and save_perc >= min_save:
+                        filtered.append(item)
+                        break
+            except (KeyError, TypeError):
+                continue
+
+        logger.info(f"✅ Articoli dopo filtro MIN_SAVE={min_save}: {len(filtered)} per '{keyword}'")
+        return filtered
 
     except Exception as e:
         logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
         return []
-
-
-def save_debug(data):
-    with open("amazon_debug.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    logger.info("💾 amazon_debug.json salvato con le risposte grezze di Amazon")
