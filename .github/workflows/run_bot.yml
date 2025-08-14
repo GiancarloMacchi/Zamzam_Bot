@@ -13,7 +13,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -21,37 +21,31 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run bot
-        run: python main.py
         env:
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
           ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
+          AMAZON_RESOURCES: ${{ secrets.AMAZON_RESOURCES }}
+        run: python main.py
 
-      - name: Upload output files
-        if: always()
+      - name: Create zip with debug files
+        run: |
+          mkdir -p artifacts
+          cp amazon_debug.json artifacts/ || true
+          cp amazon_raw.json artifacts/ || true
+          cd artifacts
+          zip amazon_data.zip * || true
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: amazon_data
-          path: |
-            amazon_debug.json
-            amazon_results.json
-            amazon_raw.json
-          if-no-files-found: warn
-
-  download-results:
-    runs-on: ubuntu-latest
-    needs: run-bot
-    steps:
-      - name: Download results
-        uses: actions/download-artifact@v4
-        with:
-          name: amazon_data
-          path: ./results
+          path: artifacts/amazon_data.zip
