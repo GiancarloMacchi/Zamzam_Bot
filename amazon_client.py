@@ -1,68 +1,50 @@
 import logging
-import os
 import json
+import os
 from amazon_paapi import AmazonAPI
 
+# Logger
 logger = logging.getLogger(__name__)
 
-AMAZON_ACCESS_KEY = os.environ.get("AMAZON_ACCESS_KEY")
-AMAZON_SECRET_KEY = os.environ.get("AMAZON_SECRET_KEY")
-AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG")
-AMAZON_COUNTRY = os.environ.get("AMAZON_COUNTRY", "IT")
+# Legge le variabili di ambiente (da GitHub Secrets)
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-def get_items(keyword):
+# Inizializza client Amazon
+amazon = AmazonAPI(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
+
+def search_amazon_items(keyword, item_count=10):
+    """
+    Cerca articoli su Amazon per una keyword.
+    Salva un file di debug con la risposta grezza.
+    """
     logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
 
-    amazon = AmazonAPI(
-        AMAZON_ACCESS_KEY,
-        AMAZON_SECRET_KEY,
-        AMAZON_ASSOCIATE_TAG,
-        AMAZON_COUNTRY
-    )
-
     try:
-        # Richiesta a Amazon API
-        response = amazon.search_items(
+        # Chiamata API senza search_index
+        results = amazon.search_items(
             keywords=keyword,
-            search_index="All",
-            resources=[
-                "ItemInfo.Title",
-                "Offers.Listings.Price",
-                "Offers.Listings.SavingBasis",
-                "Offers.Listings.Promotions"
-            ]
+            item_count=item_count
         )
 
-        # Salva risposta grezza in un file per debug
+        # Salvataggio file debug con risultati grezzi
         debug_filename = f"amazon_debug_{keyword.replace(' ', '_')}.json"
         with open(debug_filename, "w", encoding="utf-8") as f:
-            json.dump(response, f, indent=4, ensure_ascii=False)
-        logger.info(f"💾 Dati grezzi salvati in {debug_filename}")
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        logger.info(f"💾 Risposta grezza salvata in {debug_filename}")
 
-        # Estrazione dati utili
-        items = []
-        for item in response.get("SearchResult", {}).get("Items", []):
-            title = item.get("ItemInfo", {}).get("Title", {}).get("DisplayValue")
-            offers = item.get("Offers", {}).get("Listings", [])
-            price = None
-            savings_percent = 0
+        if not results:
+            logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
+            return []
 
-            if offers:
-                price_info = offers[0].get("Price", {})
-                price = price_info.get("DisplayAmount")
-                saving_basis = offers[0].get("SavingBasis", {})
-                if saving_basis:
-                    orig_price = saving_basis.get("DisplayAmount")
-                    # Qui potremmo calcolare lo sconto se necessario
-                    savings_percent = saving_basis.get("Percentage", 0)
-
-            items.append({
-                "title": title,
-                "price": price,
-                "savings_percent": savings_percent
-            })
-
-        return items
+        return results
 
     except Exception as e:
         logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
