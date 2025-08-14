@@ -44,3 +44,16 @@ jobs:
           path: |
             amazon_raw.json
             amazon_processed.json
+
+  download-results:
+    runs-on: ubuntu-latest
+    needs: run-bot
+    steps:
+      - name: Download output files
+        uses: actions/download-artifact@v4
+        with:
+          name: amazon_data
+          path: ./downloaded_results
+
+      - name: List downloaded files
+        run: ls -l ./downloaded_results
