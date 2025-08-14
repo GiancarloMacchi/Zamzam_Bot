@@ -1,19 +1,16 @@
-name: Run Amazon Bot
+name: Amazon Bot Deals
 
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'   # ogni 30 minuti (UTC)
+  workflow_dispatch:         # esecuzione manuale
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -31,36 +28,20 @@ jobs:
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          AMAZON_RESOURCES: ${{ secrets.AMAZON_RESOURCES }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_ONCE: ${{ secrets.RUN_ONCE }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}         # opzionale
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}         # opzionale
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}   # opzionale
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}     # opzionale
+          RUN_ONCE: ${{ secrets.RUN_ONCE }}         # opzionale
+          AMAZON_RESOURCES: ${{ secrets.AMAZON_RESOURCES }} # opzionale
         run: |
-          python main.py || true
-          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          mkdir -p downloaded/$TIMESTAMP
-          if [ -f amazon_raw.json ]; then
-            cp amazon_raw.json downloaded/$TIMESTAMP/
-          else
-            echo "⚠️ Nessun file amazon_raw.json trovato"
-          fi
+          python main.py
 
-      - name: Upload artifact
+      - name: Upload raw Amazon data (facoltativo)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: amazon_data
           path: amazon_raw.json
-          if-no-files-found: ignore
-
-      - name: Commit results to repo
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add downloaded/
-          git commit -m "Risultati Amazon Bot del $(date +"%Y-%m-%d %H:%M:%S") [skip ci]" || echo "Nessun cambiamento da commitare"
-          git push
