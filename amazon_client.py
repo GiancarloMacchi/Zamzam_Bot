@@ -11,14 +11,7 @@ AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
 AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
 AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-amazon = AmazonAPI(
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    AMAZON_COUNTRY
-)
-
-# Risorse di default se il file non esiste
+# Risorse di default se la secret non esiste o è malformata
 DEFAULT_RESOURCES = [
     "Images.Primary.Medium",
     "ItemInfo.Title",
@@ -28,25 +21,30 @@ DEFAULT_RESOURCES = [
     "Offers.Listings.SavingBasis"
 ]
 
-# Carica resources da file esterno
-def load_resources():
-    filename = "amazon_resources.json"
-    if os.path.exists(filename):
+def load_resources_from_secret():
+    resources_env = os.getenv("AMAZON_RESOURCES")
+    if resources_env:
         try:
-            with open(filename, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list) and all(isinstance(r, str) for r in data):
-                logger.info(f"📄 Risorse Amazon caricate da {filename}")
-                return data
+            resources = json.loads(resources_env)
+            if isinstance(resources, list) and all(isinstance(r, str) for r in resources):
+                logger.info("📦 Risorse Amazon caricate da Secret AMAZON_RESOURCES")
+                return resources
             else:
-                logger.warning(f"⚠️ File {filename} non valido. Uso default.")
+                logger.warning("⚠️ Secret AMAZON_RESOURCES non valida. Uso default.")
         except Exception as e:
-            logger.error(f"❌ Errore leggendo {filename}: {e}")
+            logger.error(f"❌ Errore parsing AMAZON_RESOURCES: {e}")
     else:
-        logger.info("ℹ️ Nessun file amazon_resources.json trovato. Uso default.")
+        logger.info("ℹ️ Nessuna secret AMAZON_RESOURCES trovata. Uso default.")
     return DEFAULT_RESOURCES
 
-RESOURCES = load_resources()
+RESOURCES = load_resources_from_secret()
+
+amazon = AmazonAPI(
+    AMAZON_ACCESS_KEY,
+    AMAZON_SECRET_KEY,
+    AMAZON_ASSOCIATE_TAG,
+    AMAZON_COUNTRY
+)
 
 def search_amazon_items(keyword, item_count=10):
     logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
