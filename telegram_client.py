@@ -11,36 +11,25 @@ class TelegramClient:
         if not self.bot_token or not self.chat_id:
             logger.error("❌ TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID mancanti nelle variabili d'ambiente.")
 
-    def send(self, items):
-        """Invia la lista di articoli a Telegram come messaggi separati."""
+    def send_message(self, text):
+        """Invia un singolo messaggio a Telegram."""
         if not self.bot_token or not self.chat_id:
             logger.error("❌ Impossibile inviare messaggi: token o chat_id mancanti.")
             return
 
-        for item in items:
-            title = item.get('title', 'Titolo non disponibile')
-            price = item.get('price', 'N/A')
-            url = item.get('url', '')
-            
-            message = (
-                f"🛒 <b>{title}</b>\n"
-                f"💶 Prezzo: {price}\n"
-                f"<a href='{url}'>Vai all'offerta</a>"
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False,
+        }
+
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+                data=payload
             )
-
-            payload = {
-                "chat_id": self.chat_id,
-                "text": message,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": False,
-            }
-
-            try:
-                response = requests.post(
-                    f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-                    data=payload
-                )
-                if response.status_code != 200:
-                    logger.error(f"❌ Errore Telegram API: {response.text}")
-            except Exception as e:
-                logger.error(f"❌ Errore durante l'invio a Telegram: {e}")
+            if response.status_code != 200:
+                logger.error(f"❌ Errore Telegram API: {response.text}")
+        except Exception as e:
+            logger.error(f"❌ Errore durante l'invio a Telegram: {e}")
