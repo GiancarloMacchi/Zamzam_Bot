@@ -6,17 +6,19 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run bot
@@ -25,25 +27,20 @@ jobs:
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
           ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
           MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
-          AMAZON_RESOURCES: ${{ secrets.AMAZON_RESOURCES }}
-        run: python main.py
+        run: |
+          python main.py
 
-      - name: Upload amazon_raw.json
-        if: always()
-        uses: actions/upload-artifact@v3
+      - name: Upload output files
+        uses: actions/upload-artifact@v4
         with:
-          name: amazon_raw
-          path: amazon_raw.json
-
-      - name: Upload amazon_debug.json
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: amazon_debug
-          path: amazon_debug.json
+          name: amazon_data
+          path: |
+            amazon_raw.json
+            amazon_processed.json
