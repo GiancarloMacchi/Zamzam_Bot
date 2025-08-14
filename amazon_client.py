@@ -7,65 +7,51 @@ from amazon_paapi import AmazonAPI
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Config da environment variables
-ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
-SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
-ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
-COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
+# Legge keywords dai Secrets
+keywords_str = os.getenv("KEYWORDS", "").strip()
+if not keywords_str:
+    logger.error("❌ Nessuna keyword trovata nei GitHub Secrets (KEYWORDS). Impostale in Actions -> Environment secrets.")
+    exit(1)
 
-# Keywords di test - puoi cambiarle
-KEYWORDS = ["giocattoli lego", "zainetto scuola bimbi"]
-BATCH_SIZE = 2  # quante keyword per esecuzione
+KEYWORDS = [k.strip() for k in keywords_str.split(",") if k.strip()]
+BATCH_SIZE = 1  # o il valore che avevi prima
 
-# Lista completa di resources
-RESOURCES = [
-    "Images.Primary.Large",
-    "Images.Variants.Large",
-    "ItemInfo.Title",
-    "ItemInfo.Features",
-    "ItemInfo.ProductInfo",
-    "ItemInfo.ByLineInfo",
-    "Offers.Listings.Price",
-    "Offers.Listings.SavingBasis",
-    "Offers.Summaries.LowestPrice"
-]
+# Configurazione Amazon API
+AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY", "IT")
 
-# Inizializza Amazon API
-amazon = AmazonAPI(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
+amazon = AmazonAPI(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
 
 
 def get_items(keyword):
     logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
     try:
-        items = amazon.search_items(
+        results = amazon.search_items(
             keywords=keyword,
-            resources=RESOURCES
+            resources=[
+                "Images.Primary.Medium",
+                "ItemInfo.Title",
+                "Offers.Listings.Price",
+                "Offers.Listings.SavingBasis"
+            ]
         )
-
-        # Salviamo la risposta grezza per debug
-        raw_data = [item.__dict__ for item in items] if items else []
-        with open("amazon_debug.json", "w", encoding="utf-8") as f:
-            json.dump(raw_data, f, indent=4, ensure_ascii=False)
-            logger.info("💾 amazon_debug.json salvato con le risposte grezze di Amazon")
-
-        if not items:
-            logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
-            return []
-
-        results = []
-        for item in items:
+        items = []
+        for item in results:
             try:
-                results.append({
-                    "title": getattr(item.item_info.title, "display_value", None),
-                    "url": getattr(item, "detail_page_url", None),
-                    "price": getattr(item.offers.listings[0].price, "amount", None) if item.offers and item.offers.listings else None,
-                    "currency": getattr(item.offers.listings[0].price, "currency", None) if item.offers and item.offers.listings else None,
-                })
-            except Exception as e:
-                logger.error(f"Errore parsing item: {e}")
-
-        return results
+                data = item.to_dict()
+                items.append(data)
+            except AttributeError:
+                logger.warning(f"⚠️ Risultato non valido per keyword '{keyword}': {item}")
+        return items
 
     except Exception as e:
         logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
         return []
+
+
+def save_debug(data):
+    with open("amazon_debug.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    logger.info("💾 amazon_debug.json salvato con le risposte grezze di Amazon")
