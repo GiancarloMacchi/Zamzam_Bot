@@ -7,8 +7,8 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # Per pushare file se serve
-      actions: write    # Per caricare artifact
+      contents: write
+      actions: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,7 +51,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: run-bot
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: amazon_data
+          path: ./downloaded
+
+      - name: Show downloaded file
+        run: |
+          echo "Contenuto di amazon_raw.json:"
+          cat ./downloaded/amazon_raw.json
