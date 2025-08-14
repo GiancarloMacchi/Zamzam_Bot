@@ -1,6 +1,5 @@
-import logging
 import os
-import json
+import logging
 from amazon_client import get_items
 
 logging.basicConfig(level=logging.INFO)
@@ -9,42 +8,27 @@ logger = logging.getLogger(__name__)
 def main():
     logger.info("🔍 Recupero articoli da Amazon...")
 
-    # Legge KEYWORDS dalle secret
-    keywords = os.getenv("KEYWORDS", "").split(",")
-    keywords = [kw.strip() for kw in keywords if kw.strip()]
+    # Recupero le keywords dalle Secret
+    keywords_env = os.getenv("KEYWORDS")
+    if not keywords_env:
+        logger.error("❌ Variabile KEYWORDS non trovata nelle Secret")
+        return
 
-    # Legge RESOURCES dalle secret
-    resources_env = os.getenv("AMAZON_RESOURCES", "[]")
-    try:
-        resources = json.loads(resources_env)
-    except json.JSONDecodeError:
-        logger.error("❌ Errore nel parsing di AMAZON_RESOURCES, uso lista vuota")
-        resources = []
-
+    keywords = [k.strip() for k in keywords_env.split(",") if k.strip()]
     if not keywords:
-        logger.warning("⚠️ Nessuna keyword trovata nelle secret")
+        logger.error("❌ Nessuna keyword valida trovata")
         return
 
-    if not resources:
-        logger.warning("⚠️ Nessuna risorsa trovata nelle secret")
-        return
+    totale_articoli = 0
 
-    total_items = []
     for keyword in keywords:
-        logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
-        try:
-            items = get_items(keyword, resources)
-            if items:
-                total_items.extend(items)
-            else:
-                logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
-        except Exception as e:
-            logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
+        items = get_items(keyword)
+        if items:
+            totale_articoli += len(items)
+        else:
+            logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
 
-    if not total_items:
-        logger.info("ℹ️ Nessun articolo trovato in totale.")
-    else:
-        logger.info(f"✅ Trovati {len(total_items)} articoli in totale.")
+    logger.info(f"ℹ️ Trovati {totale_articoli} articoli in totale.")
 
 if __name__ == "__main__":
     main()
