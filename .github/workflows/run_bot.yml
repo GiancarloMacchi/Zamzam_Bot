@@ -2,8 +2,8 @@ name: Post Amazon Deal (every 30 minutes)
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
+    - cron: '*/30 * * * *'   # ogni 30 minuti (UTC)
+  workflow_dispatch:         # esecuzione manuale per test
 
 jobs:
   post-deal:
@@ -28,11 +28,7 @@ jobs:
           AMAZON_RESOURCES: ${{ secrets.AMAZON_RESOURCES }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}    # es: lego, smartphone, cuffie
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }} # opzionale, default 10
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}    # opzionale, default 0
         run: python main.py
-
-      - name: Show amazon_raw.json content
-        run: |
-          echo "📂 Contenuto di amazon_raw.json:"
-          cat amazon_raw.json || echo "❌ File non trovato"
