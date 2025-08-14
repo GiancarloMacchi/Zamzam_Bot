@@ -40,16 +40,22 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: |
-          python main.py
+          python main.py || true
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p downloaded/$TIMESTAMP
-          cp amazon_raw.json downloaded/$TIMESTAMP/
+          if [ -f amazon_raw.json ]; then
+            cp amazon_raw.json downloaded/$TIMESTAMP/
+          else
+            echo "⚠️ Nessun file amazon_raw.json trovato"
+          fi
 
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: amazon_data
           path: amazon_raw.json
+          if-no-files-found: ignore
 
       - name: Commit results to repo
         run: |
