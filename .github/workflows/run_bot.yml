@@ -26,18 +26,19 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run bot
-        env:
-          AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
-          AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
-          AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
-          AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
-          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
-          KEYWORDS: ${{ secrets.KEYWORDS }}
-          MIN_SAVE: ${{ secrets.MIN_SAVE }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_ONCE: ${{ secrets.RUN_ONCE }}
+env:
+  AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+  AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+  AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+  AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
+  AMAZON_RESOURCES: ${{ secrets.AMAZON_RESOURCES }}
+  BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+  ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+  KEYWORDS: ${{ secrets.KEYWORDS }}
+  MIN_SAVE: ${{ secrets.MIN_SAVE }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: |
           python main.py
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
