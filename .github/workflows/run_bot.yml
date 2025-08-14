@@ -40,8 +40,9 @@ jobs:
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: |
           python main.py
-          mkdir -p downloaded
-          cp amazon_raw.json downloaded/
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          mkdir -p downloaded/$TIMESTAMP
+          cp amazon_raw.json downloaded/$TIMESTAMP/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -53,6 +54,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add downloaded/amazon_raw.json
-          git commit -m "Aggiornamento risultati Amazon Bot [skip ci]" || echo "Nessun cambiamento da commitare"
+          git add downloaded/
+          git commit -m "Risultati Amazon Bot del $(date +"%Y-%m-%d %H:%M:%S") [skip ci]" || echo "Nessun cambiamento da commitare"
           git push
