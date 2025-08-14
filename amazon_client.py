@@ -31,7 +31,7 @@ class AmazonClient:
     def search_items(self, keyword, item_count=10):
         logger.info(f"🔍 Chiamata Amazon API con keyword: {keyword}")
 
-        # Debug: stampa parametri usati
+        # Debug: parametri
         print("🔍 DEBUG — Parametri di ricerca:")
         print(f"  Keywords: {keyword}")
         print(f"  Country: {self.country}")
@@ -39,16 +39,20 @@ class AmazonClient:
         print(f"  Item Count: {item_count}")
 
         try:
-            # Nota: amazon-paapi usa parametri con lettere maiuscole
             response = self.api.search_items(
                 Keywords=keyword,
                 ItemCount=item_count,
                 Resources=self.resources
             )
 
-            # Debug: stampa la risposta completa
+            # Debug: risposta grezza
             print("📦 DEBUG — Risposta grezza da Amazon:")
             print(json.dumps(response, indent=2, ensure_ascii=False))
+
+            # Controllo errori comuni Amazon API
+            if "Errors" in response:
+                logger.error(f"❌ Errore API Amazon: {response['Errors']}")
+                raise ValueError(f"Errore API Amazon: {response['Errors']}")
 
             # Salvataggio risposta grezza
             with open("amazon_raw.json", "w", encoding="utf-8") as f:
