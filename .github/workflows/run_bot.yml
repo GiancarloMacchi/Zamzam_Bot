@@ -40,29 +40,19 @@ jobs:
           RUN_ONCE: ${{ secrets.RUN_ONCE }}
         run: |
           python main.py
+          mkdir -p downloaded
+          cp amazon_raw.json downloaded/
 
-      - name: Upload results
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: amazon_data
           path: amazon_raw.json
 
-  download-results:
-    runs-on: ubuntu-latest
-    needs: run-bot
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: amazon_data
-          path: ./downloaded
-
-      - name: Show downloaded file
+      - name: Commit results to repo
         run: |
-          echo "Contenuto di amazon_raw.json:"
-          cat ./downloaded/amazon_raw.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloaded/amazon_raw.json
+          git commit -m "Aggiornamento risultati Amazon Bot [skip ci]" || echo "Nessun cambiamento da commitare"
+          git push
