@@ -19,12 +19,21 @@ def main():
     all_items = []
     for keyword in keywords:
         results = get_items(keyword)
+
         if not results:
             logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
+            continue
+
+        # Mostra i titoli degli articoli trovati
+        logger.info(f"📦 {len(results)} articoli trovati per '{keyword}':")
+        for item in results:
+            title = item.get("title") or "❓ Titolo non disponibile"
+            logger.info(f"   - {title}")
+
         all_items.extend(results)
 
     if not all_items:
-        logger.info("ℹ️ Nessun articolo trovato.")
+        logger.info("ℹ️ Nessun articolo trovato in totale.")
         return
 
     logger.info(f"✅ Totale articoli trovati: {len(all_items)}")
