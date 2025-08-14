@@ -33,7 +33,6 @@ class AmazonClient:
         try:
             response = self.api.search_items(
                 keywords=keyword,
-                search_index="All",
                 item_count=item_count,
                 resources=self.resources
             )
@@ -48,7 +47,6 @@ class AmazonClient:
                 logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
                 return []
 
-            # Restituiamo tutto senza filtri per debug
             return response["SearchResult"]["Items"]
 
         except Exception as e:
