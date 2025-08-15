@@ -1,46 +1,49 @@
-import os
 import logging
+import os
 from amazon_client import AmazonClient
 from telegram_client import TelegramClient
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
 
 def main():
-    logger.info("🔍 Recupero articoli da Amazon...")
+    # 🔑 Leggi secrets
+    AMAZON_ACCESS_KEY = os.getenv("AMAZON_ACCESS_KEY")
+    AMAZON_SECRET_KEY = os.getenv("AMAZON_SECRET_KEY")
+    AMAZON_ASSOCIATE_TAG = os.getenv("AMAZON_ASSOCIATE_TAG")
+    AMAZON_COUNTRY = os.getenv("AMAZON_COUNTRY")
+    ITEM_COUNT = int(os.getenv("ITEM_COUNT", 10))
+    KEYWORDS = os.getenv("KEYWORDS", "").split(",")
 
-    try:
-        keywords_env = os.getenv("KEYWORDS")
-        if not keywords_env:
-            raise ValueError("⚠️ La variabile KEYWORDS non è impostata nelle Secrets.")
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-        keywords = [kw.strip() for kw in keywords_env.split(",") if kw.strip()]
-        logger.info(f"📜 Keywords lette dalle secrets: {keywords}")
+    amazon_client = AmazonClient(
+        access_key=AMAZON_ACCESS_KEY,
+        secret_key=AMAZON_SECRET_KEY,
+        associate_tag=AMAZON_ASSOCIATE_TAG,
+        country=AMAZON_COUNTRY,
+        item_count=ITEM_COUNT
+    )
 
-        min_save = float(os.getenv("MIN_SAVE", 0))
-        item_count = int(os.getenv("ITEM_COUNT", 10))
+    telegram_client = TelegramClient(
+        token=TELEGRAM_BOT_TOKEN,
+        chat_id=TELEGRAM_CHAT_ID
+    )
 
-        amazon_client = AmazonClient()
-        telegram_client = TelegramClient()
+    # 🛠 Test connessione API Amazon
+    if not amazon_client.test_connection():
+        logging.error("❌ La connessione alla PA-API non sta restituendo risultati. Controlla credenziali o stato account.")
+        return
 
-        for keyword in keywords:
-            items = amazon_client.search_items(keyword, item_count=item_count)
-            logger.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
+    logging.info("🔍 Recupero articoli da Amazon...")
+    logging.info(f"📜 Keywords lette dalle secrets: {KEYWORDS}")
 
-            for item in items:
-                try:
-                    title = item["ItemInfo"]["Title"]["DisplayValue"]
-                    price_info = item.get("Offers", {}).get("Listings", [{}])[0].get("Price", {})
-                    price = price_info.get("DisplayAmount", "N/A")
-                    url = item["DetailPageURL"]
+    for keyword in KEYWORDS:
+        items = amazon_client.search_items(keyword.strip())
+        logging.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
 
-                    msg = f"🔥 {title}\n💰 {price}\n🔗 {url}"
-                    telegram_client.send_message(msg)
-                except Exception as e:
-                    logger.error(f"Errore elaborando un articolo: {e}")
-
-    except Exception as e:
-        logger.error(f"❌ Errore nel main: {e}")
+        for item in items:
+            telegram_client.send_item(item)
 
 if __name__ == "__main__":
     main()
