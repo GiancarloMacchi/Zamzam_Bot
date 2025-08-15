@@ -1,35 +1,32 @@
 import logging
+import os
+
+# Tentativo di import con fallback
+try:
+    from telegram_bot import TelegramBot
+except ModuleNotFoundError:
+    from telegram_client import TelegramBot
+
 from amazon_client import AmazonClient
-from telegram_bot import TelegramBot
 
 logging.basicConfig(level=logging.INFO)
 
 def main():
     try:
-        amazon_client = AmazonClient(
-            access_key="FAKE_KEY",
-            secret_key="FAKE_SECRET",
-            associate_tag="FAKE_TAG",
-            country="it",
-            keywords=[
-                "regali bambino", "regali mamma", "regali papà",
-                "bambina", "bambino", "lego", "gioco",
-                "giocattolo", "scuola", "asilo"
-            ],
-            min_save=10,
-            item_count=5
-        )
-
+        amazon_client = AmazonClient()
         telegram_bot = TelegramBot()
 
-        logging.info("🔍 Recupero articoli da Amazon (MOCK)...")
-        logging.info(f"📜 Keywords lette: {amazon_client.keywords}")
+        logging.info("🔍 Recupero articoli da Amazon...")
+        keywords = amazon_client.keywords
+        logging.info(f"📜 Keywords lette: {keywords}")
 
-        for keyword in amazon_client.keywords:
-            products = amazon_client.search_items(keyword)
-            telegram_bot.send_products(products)
+        for keyword in keywords:
+            logging.info(f"🔍 Cerco prodotti per: {keyword}")
+            items = amazon_client.search_items(keyword)
+            logging.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
 
-        logging.info("✅ Processo completato con il MOCK.")
+            if items:
+                telegram_bot.send_products(items)
 
     except Exception as e:
         logging.error(f"❌ Errore nel main: {e}")
