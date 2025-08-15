@@ -1,9 +1,9 @@
 import os
-import json
 import logging
 from amazon_paapi import AmazonAPI
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("amazon_client")
 
 class AmazonClient:
     def __init__(self):
@@ -11,15 +11,9 @@ class AmazonClient:
         self.secret_key = os.getenv("AMAZON_SECRET_KEY")
         self.associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
         self.country = os.getenv("AMAZON_COUNTRY")
-        self.resources = os.getenv("AMAZON_RESOURCES")
 
-        if not all([self.access_key, self.secret_key, self.associate_tag, self.country, self.resources]):
-            raise ValueError("⚠️ Alcune variabili Amazon non sono impostate nelle Secret.")
-
-        try:
-            self.resources = json.loads(self.resources)
-        except json.JSONDecodeError:
-            raise ValueError("⚠️ AMAZON_RESOURCES non è un JSON valido.")
+        if not all([self.access_key, self.secret_key, self.associate_tag, self.country]):
+            raise ValueError("⚠️ Manca una o più variabili AMAZON_* nelle secrets.")
 
         self.api = AmazonAPI(
             self.access_key,
@@ -32,26 +26,27 @@ class AmazonClient:
         logger.info("🔍 DEBUG — Parametri di ricerca:")
         logger.info(f"  Keywords: {keyword}")
         logger.info(f"  Country: {self.country}")
-        logger.info(f"  Resources: {self.resources}")
+        logger.info(f"  Resources: ['Images.Primary.Medium', 'ItemInfo.Title', 'Offers.Listings.Price', 'Offers.Listings.SavingBasis', 'Offers.Listings.Promotions']")
         logger.info(f"  Item Count: {item_count}")
 
         try:
             response = self.api.search_items(
-                keywords=keyword,  # minuscolo
-                search_index="All",
+                keywords=keyword,
                 item_count=item_count,
-                resources=self.resources
+                resources=[
+                    "Images.Primary.Medium",
+                    "ItemInfo.Title",
+                    "Offers.Listings.Price",
+                    "Offers.Listings.SavingBasis",
+                    "Offers.Listings.Promotions"
+                ]
             )
 
-            with open("amazon_raw.json", "w", encoding="utf-8") as f:
-                json.dump(response, f, ensure_ascii=False, indent=2)
-            logger.info("💾 amazon_raw.json salvato con la risposta grezza di Amazon")
-
-            if not response or "SearchResult" not in response or "Items" not in response["SearchResult"]:
+            if hasattr(response, "items") and response.items:
+                return response.items
+            else:
                 logger.warning(f"⚠️ Nessun articolo trovato per '{keyword}'")
                 return []
-
-            return response["SearchResult"]["Items"]
 
         except Exception as e:
             logger.error(f"❌ Errore durante il recupero degli articoli: {e}")
