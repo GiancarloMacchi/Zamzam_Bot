@@ -1,38 +1,48 @@
-# amazon_client.py
 import os
 import logging
-from amazon_paapi import AmazonAPI
+from amazon_client import AmazonClient
+from telegram_client import TelegramClient
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger()
 
-class AmazonClient:
-    def __init__(self):
-        self.keywords = os.getenv("KEYWORDS", "").split(",")
-        self.item_count = int(os.getenv("ITEM_COUNT", 10))
-        self.api = AmazonAPI()
+def main():
+    logger.info("🔍 Recupero articoli da Amazon...")
 
-        if not self.keywords or self.keywords == ['']:
-            logger.error("❌ Nessuna keyword trovata nelle secrets KEYWORDS.")
-            self.keywords = []
+    try:
+        keywords_env = os.getenv("KEYWORDS")
+        if not keywords_env:
+            raise ValueError("⚠️ La variabile KEYWORDS non è impostata nelle Secrets.")
 
-    def search_items(self, keyword, item_count=None):
-        """Manteniamo il nome usato nel main.py"""
-        keyword = keyword.strip()
-        if not keyword:
-            return []
+        keywords = [kw.strip() for kw in keywords_env.split(",") if kw.strip()]
+        logger.info(f"📜 Keywords lette: {keywords}")
 
-        count = item_count or self.item_count
-        items = self.api.search_items(keyword, count)
+        min_save = float(os.getenv("MIN_SAVE", 0))
+        item_count = int(os.getenv("ITEM_COUNT", 10))
 
-        # Log dettagliato per ogni articolo
-        for item in items:
-            try:
-                title = item["ItemInfo"]["Title"]["DisplayValue"]
-                price_info = item.get("Offers", {}).get("Listings", [{}])[0].get("Price", {})
-                price = price_info.get("DisplayAmount", "N/A")
-                logger.info(f"🛒 {title} | 💰 {price}")
-            except Exception as e:
-                logger.error(f"Errore leggendo un articolo: {e}")
+        amazon_client = AmazonClient(
+            access_key=os.getenv("AMAZON_ACCESS_KEY"),
+            secret_key=os.getenv("AMAZON_SECRET_KEY"),
+            associate_tag=os.getenv("AMAZON_ASSOCIATE_TAG"),
+            country=os.getenv("AMAZON_COUNTRY"),
+            keywords=keywords
+        )
 
-        logger.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
-        return items
+        telegram_client = TelegramClient()
+
+        for keyword in amazon_client.keywords:
+            items = amazon_client.get_products(keyword, item_count=item_count)
+            logger.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
+
+            for item in items:
+                try:
+                    msg = f"🔥 {item['title']}\n💰 {item['price']}\n🔗 {item['url']}"
+                    telegram_client.send_message(msg)
+                except Exception as e:
+                    logger.error(f"Errore inviando un articolo a Telegram: {e}")
+
+    except Exception as e:
+        logger.error(f"❌ Errore nel main: {e}")
+
+if __name__ == "__main__":
+    main()
