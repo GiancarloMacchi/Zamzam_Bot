@@ -1,27 +1,47 @@
 # amazon_client.py
-import os
 import logging
 from amazon_paapi import AmazonAPI
 
 logger = logging.getLogger(__name__)
 
 class AmazonClient:
-    def __init__(self):
-        self.keywords = os.getenv("KEYWORDS", "").split(",")
-        self.item_count = int(os.getenv("ITEM_COUNT", 10))
-        self.api = AmazonAPI()
+    def __init__(self, access_key, secret_key, associate_tag, country, keywords):
+        self.keywords = keywords
+        self.api = AmazonAPI(access_key, secret_key, associate_tag, country)
 
-        if not self.keywords or self.keywords == ['']:
-            logger.error("❌ Nessuna keyword trovata nelle secrets KEYWORDS.")
-            self.keywords = []
+    def get_products(self, keyword, item_count=10):
+        logger.info(f"🔍 Cerco prodotti per: {keyword}")
+        results = self.api.search_items(keyword, item_count=item_count)
 
-    def get_items(self):
-        all_items = []
-        for kw in self.keywords:
-            kw = kw.strip()
-            if not kw:
-                continue
-            items = self.api.search_items(kw, self.item_count)
-            logger.info(f"📦 Risultati trovati per '{kw}': {len(items)}")
-            all_items.extend(items)
-        return all_items
+        products = []
+        for item in results:
+            try:
+                title = item.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "Senza titolo")
+                asin = item.get("ASIN", "")
+                url = f"https://www.amazon.{self.api._get_tld()}/dp/{asin}"
+
+                price_info = (
+                    item.get("Offers", {})
+                        .get("Listings", [{}])[0]
+                        .get("Price", {})
+                        .get("DisplayAmount", "N/D")
+                )
+
+                image_url = (
+                    item.get("Images", {})
+                        .get("Primary", {})
+                        .get("Medium", {})
+                        .get("URL", "")
+                )
+
+                products.append({
+                    "title": title,
+                    "asin": asin,
+                    "url": url,
+                    "price": price_info,
+                    "image": image_url
+                })
+            except Exception as e:
+                logger.error(f"Errore parsing prodotto: {e}")
+
+        return products
