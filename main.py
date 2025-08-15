@@ -1,40 +1,38 @@
+# amazon_client.py
+import os
 import logging
-from amazon_client import AmazonClient
-from telegram_client import TelegramClient
+from amazon_paapi import AmazonAPI
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
-def main():
-    logger.info("🔍 Recupero articoli da Amazon...")
+class AmazonClient:
+    def __init__(self):
+        self.keywords = os.getenv("KEYWORDS", "").split(",")
+        self.item_count = int(os.getenv("ITEM_COUNT", 10))
+        self.api = AmazonAPI()
 
-    try:
-        amazon_client = AmazonClient()
-        telegram_client = TelegramClient()
+        if not self.keywords or self.keywords == ['']:
+            logger.error("❌ Nessuna keyword trovata nelle secrets KEYWORDS.")
+            self.keywords = []
 
-        if not amazon_client.keywords:
-            raise ValueError("⚠️ Nessuna keyword trovata nelle Secrets.")
+    def search_items(self, keyword, item_count=None):
+        """Manteniamo il nome usato nel main.py"""
+        keyword = keyword.strip()
+        if not keyword:
+            return []
 
-        logger.info(f"📜 Keywords lette: {amazon_client.keywords}")
+        count = item_count or self.item_count
+        items = self.api.search_items(keyword, count)
 
-        for keyword in amazon_client.keywords:
-            items = amazon_client.search_items(keyword)
-            logger.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
+        # Log dettagliato per ogni articolo
+        for item in items:
+            try:
+                title = item["ItemInfo"]["Title"]["DisplayValue"]
+                price_info = item.get("Offers", {}).get("Listings", [{}])[0].get("Price", {})
+                price = price_info.get("DisplayAmount", "N/A")
+                logger.info(f"🛒 {title} | 💰 {price}")
+            except Exception as e:
+                logger.error(f"Errore leggendo un articolo: {e}")
 
-            for item in items:
-                try:
-                    title = item["ItemInfo"]["Title"]["DisplayValue"]
-                    price_info = item.get("Offers", {}).get("Listings", [{}])[0].get("Price", {})
-                    price = price_info.get("DisplayAmount", "N/A")
-                    url = item["DetailPageURL"]
-
-                    msg = f"🔥 {title}\n💰 {price}\n🔗 {url}"
-                    telegram_client.send_message(msg)
-                except Exception as e:
-                    logger.error(f"Errore elaborando un articolo: {e}")
-
-    except Exception as e:
-        logger.error(f"❌ Errore nel main: {e}")
-
-if __name__ == "__main__":
-    main()
+        logger.info(f"📦 Risultati trovati per '{keyword}': {len(items)}")
+        return items
