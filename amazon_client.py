@@ -15,7 +15,6 @@ class AmazonClient:
         """Simula una ricerca Amazon restituendo prodotti finti."""
         logging.info(f"🔍 [MOCK] Cerco prodotti per: {keyword}")
 
-        # Genera risultati finti
         results = []
         for i in range(self.item_count):
             discount = random.randint(self.min_save, 50)
