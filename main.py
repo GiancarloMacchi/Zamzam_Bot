@@ -1,61 +1,58 @@
-import os
-import json
 import logging
+import os
 from amazon_client import AmazonClient
+from telegram_bot import TelegramBot
 
+# Configura logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
-
-class TelegramBot:
-    def __init__(self, token, chat_id):
-        self.token = token
-        self.chat_id = chat_id
-
-    def send_message(self, text):
-        # Simulazione invio messaggio
-        logging.info(f"📤 [MOCK] Messaggio inviato a Telegram: {text[:50]}...")
 
 def main():
     try:
-        logger.info("🔍 Recupero articoli da Amazon...")
+        logging.info("🔍 Recupero articoli da Amazon...")
 
-        # Lettura variabili ambiente
+        # Leggo variabili di ambiente
         access_key = os.getenv("AMAZON_ACCESS_KEY", "fake_key")
         secret_key = os.getenv("AMAZON_SECRET_KEY", "fake_secret")
         associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG", "fake_tag")
         country = os.getenv("AMAZON_COUNTRY", "it")
+        keywords = os.getenv("KEYWORDS", "giocattolo, regalo").split(",")
         min_save = int(os.getenv("MIN_SAVE", 10))
-        item_count = int(os.getenv("ITEM_COUNT", 5))
+        item_count = int(os.getenv("ITEM_COUNT", 3))
 
-        keywords_env = os.getenv("KEYWORDS", '["lego","giocattolo","scuola"]')
-        try:
-            keywords = json.loads(keywords_env)
-        except json.JSONDecodeError:
-            keywords = [k.strip() for k in keywords_env.split(",") if k.strip()]
+        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
-        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "fake_token")
-        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "fake_chat_id")
-
-        # Creazione client Amazon (MOCK)
+        # Client mock Amazon
         amazon_client = AmazonClient(
-            access_key, secret_key, associate_tag,
-            country, keywords, min_save, item_count
+            access_key=access_key,
+            secret_key=secret_key,
+            associate_tag=associate_tag,
+            country=country,
+            keywords=keywords,
+            min_save=min_save,
+            item_count=item_count,
         )
 
-        telegram_bot = TelegramBot(telegram_token, telegram_chat_id)
+        # Bot Telegram
+        telegram_bot = TelegramBot(token=telegram_token, chat_id=telegram_chat_id)
 
+        # Recupero prodotti
         for keyword in keywords:
-            results = amazon_client.search_items(keyword)
-            for product in results:
+            products = amazon_client.search_items(keyword.strip())
+
+            for product in products:
                 message = (
-                    f"{product['title']}\n"
-                    f"{product['price']} ({product['discount']})\n"
-                    f"{product['url']}"
+                    f"🎁 <b>{product['title']}</b>\n"
+                    f"💰 Prezzo: {product['price']}\n"
+                    f"🔻 Sconto: {product['discount']}\n"
+                    f"🔗 <a href='{product['url']}'>Acquista su Amazon</a>"
                 )
-                telegram_bot.send_message(message)
+                telegram_bot.send_message(message, image_url=product["image"])
+
+        logging.info("✅ Invio completato!")
 
     except Exception as e:
-        logger.error(f"❌ Errore nel main: {e}")
+        logging.error(f"❌ Errore nel main: {e}")
 
 if __name__ == "__main__":
     main()
