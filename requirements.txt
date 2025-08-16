@@ -1,2 +1,9 @@
-requests
-python-dotenv
+# --- Dipendenze attuali (mock) ---
+python-dotenv>=1.0.0
+requests>=2.32.0
+
+# --- Facoltativo: manipolazione immagini (non usato ora) ---
+# Pillow>=10.0.0
+
+# --- Facoltativo: client Amazon PAAPI (se vuoi tornare a chiamate reali) ---
+# git+https://github.com/sergioteula/python-amazon-paapi.git@4d088f209440923e897366eac6eb7689244fe550
