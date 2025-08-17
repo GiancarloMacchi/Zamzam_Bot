@@ -5,10 +5,9 @@ from amazon_api import search_amazon
 
 config = load_config()
 DRY_RUN = config.get("DRY_RUN", "True") == "True"
+KEYWORDS = config["KEYWORDS"]
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-KEYWORDS = config["KEYWORDS"]
 
 def main():
     logging.info("Avvio bot Amazon…")
