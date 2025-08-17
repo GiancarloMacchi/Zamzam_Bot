@@ -1,56 +1,41 @@
 import logging
-import os
-import random
-from amazon_client import AmazonClient
-from telegram_bot import TelegramBot
+from config import load_config
+from telegram_bot import send_telegram_message
 
-logging.basicConfig(level=logging.INFO)
+# Esempio di feed Amazon (sostituire con la vera integrazione Amazon)
+# Ogni prodotto è un dizionario con: title, url, price, image_url
+example_products = [
+    {
+        "title": "Lego Classic 11001",
+        "url": "https://www.amazon.it/dp/B000FQ9QVI",
+        "price": "29,99€",
+        "image_url": "https://images-na.ssl-images-amazon.com/images/I/81Z0ZrZ6D1L._AC_SL1500_.jpg"
+    },
+    {
+        "title": "Zaino scuola bambino",
+        "url": "https://www.amazon.it/dp/B07XYZ1234",
+        "price": "19,90€",
+        "image_url": "https://images-na.ssl-images-amazon.com/images/I/71abcd12345.jpg"
+    }
+]
+
+config = load_config()
+DRY_RUN = config.get("DRY_RUN", "True") == "True"
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main():
-    try:
-        logging.info("🔍 Recupero articoli da Amazon...")
+    logging.info("Avvio bot Amazon…")
+    
+    for product in example_products:
+        title = product.get("title")
+        url = product.get("url")
+        price = product.get("price")
+        image_url = product.get("image_url")
 
-        # Leggo variabili di ambiente
-        access_key = os.getenv("AMAZON_ACCESS_KEY")
-        secret_key = os.getenv("AMAZON_SECRET_KEY")
-        associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG")
-        country = os.getenv("AMAZON_COUNTRY", "it")
-        keywords = os.getenv("KEYWORDS", "regali bambino, regali mamma, regali papà").split(",")
-        min_save = int(os.getenv("MIN_SAVE", 10))
-        item_count = int(os.getenv("ITEM_COUNT", 5))
-        dry_run = os.getenv("DRY_RUN", "False").lower() == "true"
+        send_telegram_message(title, url, price, image_url)
 
-        amazon_client = AmazonClient(
-            access_key, secret_key, associate_tag, country,
-            keywords, min_save, item_count
-        )
-        telegram_bot = TelegramBot(
-            os.getenv("TELEGRAM_BOT_TOKEN"),
-            os.getenv("TELEGRAM_CHAT_ID")
-        )
-
-        for keyword in keywords:
-            keyword = keyword.strip()
-            results = amazon_client.search_items(keyword)
-
-            if not results:
-                continue
-
-            # 👇 prendo un prodotto casuale
-            product = random.choice(results)
-
-            msg = f"🎁 {product['title']}\n💰 {product['price']} ({product['discount']})\n👉 {product['url']}"
-
-            if dry_run:
-                logging.info(f"[DRY RUN] Messaggio pronto per Telegram:\n{msg}")
-            else:
-                telegram_bot.send_message(
-                    msg,
-                    image_url=product.get("image")
-                )
-
-    except Exception as e:
-        logging.error(f"❌ Errore nel main: {e}")
+    logging.info("Esecuzione completata.")
 
 if __name__ == "__main__":
     main()
