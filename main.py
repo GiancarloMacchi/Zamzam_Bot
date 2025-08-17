@@ -1,58 +1,37 @@
 import logging
-import os
-from amazon_client import AmazonClient
-from telegram_bot import TelegramBot
+import requests
 
-# Configura logging
-logging.basicConfig(level=logging.INFO)
+class TelegramBot:
+    def __init__(self, token, chat_id):
+        self.token = token
+        self.chat_id = chat_id
+        self.base_url = f"https://api.telegram.org/bot{self.token}"
 
-def main():
-    try:
-        logging.info("🔍 Recupero articoli da Amazon...")
+    def send_message(self, text, image_url=None):
+        """Invia un messaggio su Telegram, con immagine opzionale."""
+        try:
+            if image_url:
+                # Messaggio con immagine
+                url = f"{self.base_url}/sendPhoto"
+                payload = {
+                    "chat_id": self.chat_id,
+                    "caption": text,
+                    "parse_mode": "HTML",
+                }
+                files = {"photo": requests.get(image_url, stream=True).raw}
+                response = requests.post(url, data=payload, files=files)
+            else:
+                # Solo testo
+                url = f"{self.base_url}/sendMessage"
+                payload = {
+                    "chat_id": self.chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                }
+                response = requests.post(url, data=payload)
 
-        # Leggo variabili di ambiente
-        access_key = os.getenv("AMAZON_ACCESS_KEY", "fake_key")
-        secret_key = os.getenv("AMAZON_SECRET_KEY", "fake_secret")
-        associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG", "fake_tag")
-        country = os.getenv("AMAZON_COUNTRY", "it")
-        keywords = os.getenv("KEYWORDS", "giocattolo, regalo").split(",")
-        min_save = int(os.getenv("MIN_SAVE", 10))
-        item_count = int(os.getenv("ITEM_COUNT", 3))
+            response.raise_for_status()
+            logging.info("📨 Messaggio inviato con successo!")
 
-        telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-
-        # Client mock Amazon
-        amazon_client = AmazonClient(
-            access_key=access_key,
-            secret_key=secret_key,
-            associate_tag=associate_tag,
-            country=country,
-            keywords=keywords,
-            min_save=min_save,
-            item_count=item_count,
-        )
-
-        # Bot Telegram
-        telegram_bot = TelegramBot(token=telegram_token, chat_id=telegram_chat_id)
-
-        # Recupero prodotti
-        for keyword in keywords:
-            products = amazon_client.search_items(keyword.strip())
-
-            for product in products:
-                message = (
-                    f"🎁 <b>{product['title']}</b>\n"
-                    f"💰 Prezzo: {product['price']}\n"
-                    f"🔻 Sconto: {product['discount']}\n"
-                    f"🔗 <a href='{product['url']}'>Acquista su Amazon</a>"
-                )
-                telegram_bot.send_message(message, image_url=product["image"])
-
-        logging.info("✅ Invio completato!")
-
-    except Exception as e:
-        logging.error(f"❌ Errore nel main: {e}")
-
-if __name__ == "__main__":
-    main()
+        except Exception as e:
+            logging.error(f"❌ Errore nell'invio del messaggio: {e}")
