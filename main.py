@@ -1,42 +1,58 @@
-import logging
 import time
+import logging
 from config import load_config
 from amazon_api import search_amazon
 from telegram_bot import send_telegram_message
 
-# Configurazione logging
+# Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Caricamento configurazione
+# Carica configurazione
 config = load_config()
-KEYWORDS = config.get("KEYWORDS", [])
+KEYWORDS = config["KEYWORDS"]
 DRY_RUN = config.get("DRY_RUN", True)
-INTERVAL = config.get("TELEGRAM_INTERVAL_MINUTES", 30) * 60  # secondi
+RETRY_COUNT = config.get("RETRY_COUNT", 3)
+RETRY_DELAY = config.get("RETRY_DELAY", 10)  # secondi
+INTERVAL_MINUTES = config.get("INTERVAL_MINUTES", 30)
 
-def main():
-    logging.info("Avvio bot Amazon…")
-    
-    for keyword in KEYWORDS:
-        logging.info(f"Cercando prodotti per: {keyword}")
-        products = search_amazon(keyword, config)
-        if not products:
-            logging.info(f"Nessun prodotto trovato per: {keyword}")
-            continue
-        
-        logging.info("Invio prodotti su Telegram con intervallo programmato...")
-        for product in products:
-            message = f"🔹 <b>{product['title']}</b>\n"
-            message += f"{product['url']}\n"
-            message += f"💰 Prezzo: {product['price']}\n"
-            message += f"{product['description']}\n"
-            message += f"Immagine: {product['image']}"
+logging.info("Avvio bot Amazon…")
 
-            send_telegram_message(message, dry_run=DRY_RUN)
-            
-            logging.info(f"Attendo {INTERVAL // 60} minuti prima della prossima offerta...")
-            time.sleep(INTERVAL)
-    
-    logging.info("Esecuzione completata.")
+all_products = []
 
-if __name__ == "__main__":
-    main()
+# Cerca prodotti per ogni keyword
+for keyword in KEYWORDS:
+    logging.info(f"Cercando prodotti per: {keyword}")
+    retry_attempts = 0
+    while retry_attempts < RETRY_COUNT:
+        try:
+            products = search_amazon(keyword)
+            all_products.extend(products)
+            break
+        except Exception as e:
+            retry_attempts += 1
+            logging.warning(f"Errore API Amazon: {e} - Tentativo {retry_attempts}/{RETRY_COUNT}")
+            time.sleep(RETRY_DELAY)
+    else:
+        logging.error(f"Falliti tutti i tentativi per keyword: {keyword}")
+
+# Invio prodotti su Telegram dilazionato
+if all_products:
+    logging.info("Invio prodotti su Telegram con intervallo programmato...")
+    for idx, product in enumerate(all_products, start=1):
+        title = product.get("title", "N/A")
+        url = product.get("url", "#")
+        price = product.get("price", "N/A")
+        image = product.get("image", "")
+        description = product.get("description", "")
+
+        message = f"🔹 <b>{title}</b>\n{url}\n💰 Prezzo: {price}\n{description}\nImmagine: {image}"
+
+        if DRY_RUN:
+            logging.info(f"[DRY RUN] Messaggio Telegram:\n{message}")
+        else:
+            send_telegram_message(message)
+
+        logging.info(f"Attendo {INTERVAL_MINUTES} minuti prima della prossima offerta...")
+        time.sleep(INTERVAL_MINUTES * 60)
+
+logging.info("Esecuzione completata.")
