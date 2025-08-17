@@ -1,31 +1,42 @@
-name: Run Amazon Bot
+name: Avvio Bot Amazon
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # ogni 30 minuti
-  workflow_dispatch:
+    # Ogni 30 minuti
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Permette avvio manuale
 
 jobs:
-  bot:
+  run_bot:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-      - name: Verify python-amazon-paapi
-        run: |
-          python -c "from amazon_paapi import AmazonAPI; print('python-amazon-paapi OK!')"
+    - name: Run test Amazon API import
+      run: |
+        python -c "from amazon_paapi import AmazonAPI; print('python-amazon-paapi OK!')"
 
-      - name: Run bot
-        run: python main.py
+    - name: Avvio bot
+      run: |
+        echo "Avvio bot..."
+        python main.py
+      env:
+        # Se usi GitHub Secrets, inserisci qui le variabili
+        AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
+        AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
+        AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
+        AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
