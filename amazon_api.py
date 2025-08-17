@@ -1,5 +1,5 @@
 import logging
-from amazon_paapi import AmazonAPI
+from paapi import AmazonAPI
 
 def search_amazon(keyword, config):
     try:
