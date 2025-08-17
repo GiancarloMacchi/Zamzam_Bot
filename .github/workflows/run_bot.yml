@@ -2,34 +2,30 @@ name: Run Amazon Bot
 
 on:
   schedule:
-    # Esegue ogni 30 minuti
-    - cron: '*/30 * * * *'
-  workflow_dispatch:  # permette l'avvio manuale
+    - cron: '*/30 * * * *'  # ogni 30 minuti
+  workflow_dispatch:
 
 jobs:
-  run-bot:
+  bot:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install dependencies (verbose)
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          pip install --verbose python-telegram-bot python-amazon-paapi
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Verify python-amazon-paapi
         run: |
-          python -c "import amazon.paapi; print('python-amazon-paapi OK!')"
+          python -c "from amazon_paapi import AmazonAPI; print('python-amazon-paapi OK!')"
 
-      - name: Run Amazon bot
-        run: |
-          echo "Avvio bot..."
-          python main.py
+      - name: Run bot
+        run: python main.py
