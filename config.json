@@ -1,6 +1,12 @@
 {
+  "AMAZON_ACCESS_KEY": "LA_TUA_CHIAVE_REALE",
+  "AMAZON_SECRET_KEY": "LA_TUA_CHIAVE_REALE",
+  "AMAZON_ASSOCIATE_TAG": "iltuotag-21",
+  "AMAZON_COUNTRY": "it",
   "KEYWORDS": ["regali bambino", "regali mamma", "regali papà", "lego", "scuola"],
   "MIN_SAVE": "10",
   "ITEM_COUNT": "5",
-  "DRY_RUN": "True"
+  "TELEGRAM_BOT_TOKEN": "IL_TUO_TOKEN_REALE",
+  "TELEGRAM_CHAT_ID": "IL_TUO_CHAT_ID",
+  "DRY_RUN": "False"
 }
