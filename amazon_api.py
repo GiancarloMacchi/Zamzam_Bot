@@ -11,7 +11,7 @@ if not DRY_RUN:
             config["AMAZON_ACCESS_KEY"],
             config["AMAZON_SECRET_KEY"],
             config["AMAZON_ASSOCIATE_TAG"],
-            config["AMAZON_COUNTRY"]
+            config.get("AMAZON_COUNTRY", "it")
         )
     except ImportError:
         logging.error("Pacchetto python-amazon-paapi non installato. Passo in DRY_RUN.")
@@ -21,7 +21,7 @@ def search_amazon(keyword):
     if DRY_RUN:
         logging.info(f"[DRY RUN] Simulazione ricerca Amazon per keyword: {keyword}")
         products = []
-        for i in range(1, 6):  # genera 5 prodotti fittizi
+        for i in range(1, 6):
             products.append({
                 "title": f"{keyword} Prodotto {i}",
                 "url": f"https://www.amazon.***/dp/EXAMPLE{i}",
@@ -42,7 +42,7 @@ def search_amazon(keyword):
                 "url": item.detail_page_url,
                 "price": getattr(item, 'price_and_currency', "N/A"),
                 "image_url": item.images[0].url if item.images else None,
-                "description": getattr(item, 'features', [""])[0]  # prima caratteristica
+                "description": getattr(item, 'features', [""])[0]
             })
         return products
 
