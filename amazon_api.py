@@ -1,33 +1,36 @@
 import logging
-from paapi import AmazonAPI
+import time
+from amazon.paapi import AmazonAPI
 
+logger = logging.getLogger(__name__)
 
-def search_amazon(config, keyword):
-    """Cerca prodotti su Amazon e restituisce lista di dict {title, url}"""
-    amazon = AmazonAPI(
-        config["AMAZON_ACCESS_KEY"],
-        config["AMAZON_SECRET_KEY"],
-        config["AMAZON_ASSOCIATE_TAG"],
-        config["AMAZON_COUNTRY"]
-    )
+def search_amazon(keyword, config):
+    """
+    Restituisce una lista di prodotti Amazon per la keyword.
+    config: dizionario contenente chiavi AWS e PA-API
+    """
+    access_key = config['AMAZON_ACCESS_KEY']
+    secret_key = config['AMAZON_SECRET_KEY']
+    associate_tag = config['AMAZON_ASSOCIATE_TAG']
+    country = config['AMAZON_COUNTRY']
 
-    try:
-        items = amazon.search_items(keywords=keyword, item_count=int(config.get("ITEM_COUNT", 5)))
-        results = []
+    api = AmazonAPI(access_key, secret_key, associate_tag, country)
 
-        for item in items:
-            try:
-                title = item.title if hasattr(item, "title") else "Senza titolo"
-                url = item.detail_page_url if hasattr(item, "detail_page_url") else "Nessun link"
-                results.append({
-                    "title": title,
-                    "url": url
+    for attempt in range(3):
+        try:
+            results = api.search_products(keywords=keyword, search_index='All', item_count=5)
+            products = []
+            for item in results.items:
+                products.append({
+                    'title': item.title,
+                    'url': item.detail_page_url,
+                    'price': getattr(item, 'price_and_currency', 'N/A'),
+                    'image': getattr(item.images, 'primary', {}).get('medium', ''),
+                    'description': getattr(item, 'feature_bullets', [''])[0]
                 })
-            except Exception as e:
-                logging.warning(f"Impossibile processare un item Amazon: {e}")
-
-        return results
-
-    except Exception as e:
-        logging.error(f"Errore in search_amazon: {e}")
-        raise
+            return products
+        except Exception as e:
+            logger.warning(f"Errore API Amazon: {e} - Tentativo {attempt+1}/3")
+            time.sleep(10)
+    logger.error(f"Falliti tutti i tentativi per keyword: {keyword}")
+    return []
