@@ -23,12 +23,16 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install --upgrade pip
-      - run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify python-amazon-paapi installation
+        run: |
+          python -c "import amazon.paapi; print('python-amazon-paapi OK!')"
 
       - name: Run bot
         env:
-          # Inserisci qui eventuali Secrets
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
