@@ -1,9 +1,0 @@
-AMAZON_ACCESS_KEY=fake_key
-AMAZON_SECRET_KEY=fake_secret
-AMAZON_ASSOCIATE_TAG=fake_tag
-AMAZON_COUNTRY=it
-KEYWORDS=["lego", "giocattolo", "scuola"]
-MIN_SAVE=10
-ITEM_COUNT=3
-TELEGRAM_BOT_TOKEN=fake_token
-TELEGRAM_CHAT_ID=fake_chat_id
