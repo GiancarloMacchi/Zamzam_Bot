@@ -1,11 +1,13 @@
-name: Run Zamzam Bot
+name: Run Amazon Bot
 
+# Trigger: push su main, schedulato ogni 30 minuti, o manuale
 on:
   push:
     branches:
       - main
   schedule:
-    - cron: '*/30 * * * *'  # esegue il bot ogni 30 minuti
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -18,25 +20,23 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install --upgrade pip
+      - run: pip install -r requirements.txt
 
-      - name: Check installed packages
-        run: |
-          pip list
-
-      - name: Run Zamzam Bot
+      - name: Run bot
         env:
+          # Inserisci qui eventuali Secrets
           AMAZON_ACCESS_KEY: ${{ secrets.AMAZON_ACCESS_KEY }}
           AMAZON_SECRET_KEY: ${{ secrets.AMAZON_SECRET_KEY }}
           AMAZON_ASSOCIATE_TAG: ${{ secrets.AMAZON_ASSOCIATE_TAG }}
           AMAZON_COUNTRY: ${{ secrets.AMAZON_COUNTRY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          echo "Avvio bot..."
-          python main.py
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+          MIN_SAVE: ${{ secrets.MIN_SAVE }}
+          ITEM_COUNT: ${{ secrets.ITEM_COUNT }}
+          DRY_RUN: ${{ secrets.DRY_RUN }}
+        run: python main.py
