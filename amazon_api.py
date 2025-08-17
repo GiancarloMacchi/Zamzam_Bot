@@ -1,6 +1,6 @@
 import logging
 import time
-from amazon.paapi import AmazonAPI  # Assicurati che python-amazon-paapi sia installato
+from amazon_paapi import AmazonAPI  # Assicurati che python-amazon-paapi sia installato
 
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # secondi
