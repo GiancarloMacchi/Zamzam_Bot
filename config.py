@@ -1,15 +1,25 @@
 import json
 import os
 
+CONFIG_FILE = "config.json"
+
 def load_config():
-    with open("config.json", "r") as f:
-        config = json.load(f)
-    
-    # Sovrascrivi con secrets/env variables se presenti
-    config["AMAZON_ACCESS_KEY"] = os.getenv("AMAZON_ACCESS_KEY", config.get("AMAZON_ACCESS_KEY"))
-    config["AMAZON_SECRET_KEY"] = os.getenv("AMAZON_SECRET_KEY", config.get("AMAZON_SECRET_KEY"))
-    config["AMAZON_ASSOCIATE_TAG"] = os.getenv("AMAZON_ASSOCIATE_TAG", config.get("AMAZON_ASSOCIATE_TAG"))
-    config["TELEGRAM_BOT_TOKEN"] = os.getenv("TELEGRAM_BOT_TOKEN", config.get("TELEGRAM_BOT_TOKEN"))
-    config["TELEGRAM_CHAT_ID"] = os.getenv("TELEGRAM_CHAT_ID", config.get("TELEGRAM_CHAT_ID"))
-    
+    # Se usi Secrets di GitHub, puoi fare l'override con le variabili d'ambiente
+    config = {}
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            config = json.load(f)
+
+    # Conversione DRY_RUN in booleano (può essere stringa o booleano)
+    dry_run = config.get("DRY_RUN", True)
+    if isinstance(dry_run, str):
+        dry_run = dry_run.lower() == "true"
+    config["DRY_RUN"] = dry_run
+
+    # Assicuriamoci che KEYWORDS sia sempre lista
+    keywords = config.get("KEYWORDS", [])
+    if isinstance(keywords, str):
+        keywords = [kw.strip() for kw in keywords.split(",")]
+    config["KEYWORDS"] = keywords
+
     return config
