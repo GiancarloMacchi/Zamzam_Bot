@@ -1,37 +1,44 @@
 import logging
 import time
-from amazon_paapi import AmazonAPI  # Assicurati che python-amazon-paapi sia installato
+from amazon_paapi import AmazonAPI
 
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # secondi
 
-def search_amazon(keyword, config):
+def search_amazon(keyword, config, max_retries=3, delay=10):
     """
-    Restituisce una lista di prodotti da Amazon per la keyword.
-    Ogni prodotto: {'title', 'url', 'price', 'description', 'image'}
+    Cerca prodotti su Amazon usando le API PAAPI.
+    Ritorna una lista di prodotti (dizionari con 'title' e 'url').
     """
-    products = []
-    retries = 0
-    
-    while retries < MAX_RETRIES:
+    amazon = AmazonAPI(
+        config["AMAZON_ACCESS_KEY"],
+        config["AMAZON_SECRET_KEY"],
+        config["AMAZON_ASSOCIATE_TAG"],
+        config["AMAZON_COUNTRY"],
+    )
+
+    for attempt in range(1, max_retries + 1):
         try:
-            # Simulazione di chiamata reale a PA-API
-            # Sostituire con AmazonAPI effettivo
-            logging.info(f"[DRY RUN] Simulazione ricerca Amazon per keyword: {keyword}")
-            for i in range(1, 10):
-                products.append({
-                    "title": f"{keyword} Prodotto {i}",
-                    "url": f"https://www.amazon.***/dp/EXAMPLE{i}",
-                    "price": f"{i*10},99€",
-                    "description": f"Breve descrizione di {keyword} {i}",
-                    "image": f"https://via.placeholder.com/150?text={keyword}+{i}"
-                })
-            return products
-        
+            products = amazon.search_items(
+                keywords=keyword,
+                item_count=int(config.get("ITEM_COUNT", 3))
+            )
+
+            results = []
+            for item in products.items:
+                try:
+                    results.append({
+                        "title": item.item_info.title.display_value,
+                        "url": item.detail_page_url,
+                    })
+                except AttributeError:
+                    continue  # se manca qualche campo, saltiamo l'item
+
+            if results:
+                return results
+
         except Exception as e:
-            retries += 1
-            logging.error(f"Errore ricerca Amazon: {e} - Tentativo {retries}/{MAX_RETRIES}")
-            time.sleep(RETRY_DELAY)
-    
-    logging.warning(f"Nessun prodotto trovato per {keyword} dopo {MAX_RETRIES} tentativi.")
-    return products
+            logging.warning(
+                f"Errore API Amazon: {e} - Tentativo {attempt}/{max_retries}"
+            )
+            time.sleep(delay)
+
+    return []
