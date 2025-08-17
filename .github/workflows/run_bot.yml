@@ -24,9 +24,11 @@ jobs:
           pip install -r requirements.txt
           pip install --force-reinstall python-amazon-paapi
 
-      - name: Test python-amazon-paapi installation
+      - name: Verify dependencies
         run: |
           python -c "from amazon_paapi import AmazonAPI; print('python-amazon-paapi OK!')"
+          python -c "import requests; print('requests OK!')"
+          python -c "import telegram; print('python-telegram-bot OK!')"
 
       - name: Run bot
         run: python main.py
