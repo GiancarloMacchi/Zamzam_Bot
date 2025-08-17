@@ -1,39 +1,47 @@
-from amazon.paapi import AmazonAPI
-from config import load_config
+# amazon_api.py
+import time
 import logging
+from amazon.paapi import AmazonAPI, AmazonException
 
-config = load_config()
-amazon = AmazonAPI(
-    config["AMAZON_ACCESS_KEY"],
-    config["AMAZON_SECRET_KEY"],
-    config["AMAZON_ASSOCIATE_TAG"],
-    config["AMAZON_COUNTRY"]
-)
+AMAZON_ACCESS_KEY = "INSERISCI_LA_TUA_CHIAVE"
+AMAZON_SECRET_KEY = "INSERISCI_LA_TUA_CHIAVE"
+AMAZON_ASSOCIATE_TAG = "iltuotag-21"
+AMAZON_COUNTRY = "it"
 
-def search_amazon(keyword, item_count=5, dry_run=True):
-    products = []
-    if dry_run:
-        logging.info(f"[DRY RUN] Simulazione ricerca Amazon per keyword: {keyword}")
-        for i in range(1, item_count + 1):
-            products.append({
-                "title": f"{keyword} Prodotto {i}",
-                "url": f"https://www.amazon.***/dp/EXAMPLE{i}",
-                "price": f"{i*10},99€",
-                "description": f"Breve descrizione di {keyword} {i}",
-                "image": f"https://via.placeholder.com/150?text={keyword}+{i}"
-            })
-        return products
+MAX_RETRIES = 3      # numero massimo di tentativi
+RETRY_DELAY = 5      # secondi tra i retry
 
-    try:
-        items = amazon.search_products(keywords=keyword, search_index="All", item_count=item_count)
-        for item in items:
-            products.append({
-                "title": item.title,
-                "url": item.detail_page_url,
-                "price": item.price_and_currency[0] if item.price_and_currency else "N/A",
-                "description": item.features[0] if item.features else "Descrizione non disponibile",
-                "image": item.images[0].url if item.images else None
-            })
-    except Exception as e:
-        logging.error(f"Errore API Amazon: {str(e)}")
-    return products
+def search_amazon(keyword, item_count=5):
+    """
+    Cerca prodotti su Amazon usando PA-API 5.0 con retry automatici.
+    Restituisce una lista di dizionari: [{'title':..., 'url':..., 'price':..., 'image':..., 'description':...}, ...]
+    """
+    api = AmazonAPI(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_ASSOCIATE_TAG, AMAZON_COUNTRY)
+    attempts = 0
+
+    while attempts < MAX_RETRIES:
+        try:
+            logging.info(f"[PA-API] Tentativo {attempts+1} per keyword: {keyword}")
+            products = api.search_items(keywords=keyword, item_count=item_count)
+            results = []
+            for p in products:
+                results.append({
+                    "title": p.title,
+                    "url": p.detail_page_url,
+                    "price": getattr(p, 'price_and_currency', "N/A"),
+                    "image": getattr(p, 'images', [{}])[0].get('url', ''),
+                    "description": getattr(p, 'feature_bullets', ["Breve descrizione non disponibile"])[0]
+                })
+            return results
+
+        except AmazonException as e:
+            attempts += 1
+            logging.warning(f"[PA-API] Errore Amazon: {e}. Retry in {RETRY_DELAY}s...")
+            time.sleep(RETRY_DELAY)
+        except Exception as e:
+            attempts += 1
+            logging.warning(f"[PA-API] Errore generico: {e}. Retry in {RETRY_DELAY}s...")
+            time.sleep(RETRY_DELAY)
+
+    logging.error(f"[PA-API] Falliti tutti i {MAX_RETRIES} tentativi per keyword: {keyword}")
+    return []  # ritorna lista vuota se tutti i tentativi falliscono
