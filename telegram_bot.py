@@ -1,6 +1,5 @@
 import logging
 from config import load_config
-import requests
 
 config = load_config()
 DRY_RUN = config.get("DRY_RUN", "True") == "True"
