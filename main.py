@@ -1,4 +1,3 @@
-# main.py
 import time
 import logging
 from config import load_config
