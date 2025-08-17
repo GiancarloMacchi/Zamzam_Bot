@@ -10,6 +10,7 @@ def main():
         logging.info("🔍 Recupero articoli da Amazon...")
 
         config = load_config()
+        mock_mode = config.get("MOCK", True)
 
         amazon_client = AmazonClient(
             config["AMAZON_ACCESS_KEY"],
@@ -33,7 +34,12 @@ def main():
                     f"🔻 Sconto: {product['discount']}\n"
                     f"🔗 <a href='{product['url']}'>Vedi su Amazon</a>"
                 )
-                telegram_bot.send_message(message, image_url=product["image"])
+                image_url = None if mock_mode else product.get("image")
+                try:
+                    telegram_bot.send_message(message, image_url=image_url)
+                except Exception as e:
+                    logging.error(f"❌ Errore nell'invio del messaggio: {e}. Riprovo senza immagine.")
+                    telegram_bot.send_message(message, image_url=None)
 
     except Exception as e:
         logging.error(f"❌ Errore nel main: {e}")
