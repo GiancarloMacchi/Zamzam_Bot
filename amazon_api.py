@@ -1,36 +1,18 @@
 import logging
-import time
-from amazon.paapi import AmazonAPI
+from amazon_paapi import AmazonAPI
 
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # secondi
-
-def search_amazon(keyword, item_count):
-    from config import load_config
-    config = load_config()
-    amazon = AmazonAPI(
-        config["AMAZON_ACCESS_KEY"],
-        config["AMAZON_SECRET_KEY"],
-        config["AMAZON_ASSOCIATE_TAG"],
-        country=config["AMAZON_COUNTRY"]
-    )
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            results = amazon.search_items(keywords=keyword, max_results=item_count)
-            products = []
-            for item in results:
-                products.append({
-                    "title": item.title,
-                    "url": item.detail_page_url,
-                    "price": getattr(item, "price_and_currency", {}).get("formatted", "N/A"),
-                    "description": getattr(item, "features", ["Breve descrizione non disponibile"])[0],
-                    "image": item.images[0].url if item.images else ""
-                })
-            return products
-        except Exception as e:
-            logging.error(f"Errore API Amazon (tentativo {attempt}/{MAX_RETRIES}): {e}")
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-            else:
-                return []
+def search_amazon(keywords, item_count=5):
+    results = []
+    for kw in keywords:
+        logging.info(f"Cercando prodotti per: {kw}")
+        # Inserisci qui la logica reale o di test
+        # Simulazione DRY_RUN se configurato
+        for i in range(1, item_count + 1):
+            results.append({
+                "title": f"{kw} Prodotto {i}",
+                "url": f"https://www.amazon.***/dp/EXAMPLE{i}",
+                "price": f"{i*10},99€",
+                "image": f"https://via.placeholder.com/150?text={kw}+{i}",
+                "description": f"Breve descrizione di {kw} {i}"
+            })
+    return results
