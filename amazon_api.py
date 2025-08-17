@@ -1,44 +1,33 @@
 import logging
-import time
-from amazon_paapi import AmazonAPI
+from amazon.paapi import AmazonAPI
 
 
-def search_amazon(keyword, config, max_retries=3, delay=10):
-    """
-    Cerca prodotti su Amazon usando le API PAAPI.
-    Ritorna una lista di prodotti (dizionari con 'title' e 'url').
-    """
+def search_amazon(config, keyword):
+    """Cerca prodotti su Amazon e restituisce lista di dict {title, url}"""
     amazon = AmazonAPI(
         config["AMAZON_ACCESS_KEY"],
         config["AMAZON_SECRET_KEY"],
         config["AMAZON_ASSOCIATE_TAG"],
-        config["AMAZON_COUNTRY"],
+        config["AMAZON_COUNTRY"]
     )
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            products = amazon.search_items(
-                keywords=keyword,
-                item_count=int(config.get("ITEM_COUNT", 3))
-            )
+    try:
+        items = amazon.search_items(keywords=keyword, item_count=int(config.get("ITEM_COUNT", 5)))
+        results = []
 
-            results = []
-            for item in products.items:
-                try:
-                    results.append({
-                        "title": item.item_info.title.display_value,
-                        "url": item.detail_page_url,
-                    })
-                except AttributeError:
-                    continue  # se manca qualche campo, saltiamo l'item
+        for item in items:
+            try:
+                title = item.title if hasattr(item, "title") else "Senza titolo"
+                url = item.detail_page_url if hasattr(item, "detail_page_url") else "Nessun link"
+                results.append({
+                    "title": title,
+                    "url": url
+                })
+            except Exception as e:
+                logging.warning(f"Impossibile processare un item Amazon: {e}")
 
-            if results:
-                return results
+        return results
 
-        except Exception as e:
-            logging.warning(
-                f"Errore API Amazon: {e} - Tentativo {attempt}/{max_retries}"
-            )
-            time.sleep(delay)
-
-    return []
+    except Exception as e:
+        logging.error(f"Errore in search_amazon: {e}")
+        raise
