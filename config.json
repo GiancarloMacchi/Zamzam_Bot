@@ -1,13 +1,7 @@
 {
-  "KEYWORDS": [
-    "regali bambino",
-    "regali mamma",
-    "regali papà",
-    "lego",
-    "scuola"
-  ],
-  "ITEM_COUNT": 10,
+  "KEYWORDS": ["regali bambino", "regali mamma", "regali papà", "lego", "scuola"],
   "DRY_RUN": true,
-  "TELEGRAM_BOT_TOKEN": "inserisci_il_tuo_token",
-  "TELEGRAM_CHAT_ID": "inserisci_il_tuo_chat_id"
+  "TELEGRAM_INTERVAL_MINUTES": 30,
+  "TELEGRAM_BOT_TOKEN": "inserisci_bot_token",
+  "TELEGRAM_CHAT_ID": "inserisci_chat_id"
 }
