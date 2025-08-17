@@ -1,51 +1,39 @@
-import logging
+from amazon.paapi import AmazonAPI
 from config import load_config
+import logging
 
 config = load_config()
-DRY_RUN = config.get("DRY_RUN", "True") == "True"
+amazon = AmazonAPI(
+    config["AMAZON_ACCESS_KEY"],
+    config["AMAZON_SECRET_KEY"],
+    config["AMAZON_ASSOCIATE_TAG"],
+    config["AMAZON_COUNTRY"]
+)
 
-if not DRY_RUN:
-    try:
-        from amazon.paapi import AmazonAPI
-        amazon = AmazonAPI(
-            config["AMAZON_ACCESS_KEY"],
-            config["AMAZON_SECRET_KEY"],
-            config["AMAZON_ASSOCIATE_TAG"],
-            config.get("AMAZON_COUNTRY", "it")
-        )
-    except ImportError:
-        logging.error("Pacchetto python-amazon-paapi non installato. Passo in DRY_RUN.")
-        DRY_RUN = True
-
-def search_amazon(keyword):
-    if DRY_RUN:
+def search_amazon(keyword, item_count=5, dry_run=True):
+    products = []
+    if dry_run:
         logging.info(f"[DRY RUN] Simulazione ricerca Amazon per keyword: {keyword}")
-        products = []
-        for i in range(1, 6):
+        for i in range(1, item_count + 1):
             products.append({
                 "title": f"{keyword} Prodotto {i}",
                 "url": f"https://www.amazon.***/dp/EXAMPLE{i}",
                 "price": f"{i*10},99€",
-                "image_url": f"https://via.placeholder.com/150?text={keyword}+{i}",
-                "description": f"Breve descrizione di {keyword} {i}"
+                "description": f"Breve descrizione di {keyword} {i}",
+                "image": f"https://via.placeholder.com/150?text={keyword}+{i}"
             })
         return products
 
     try:
-        logging.info(f"Cercando prodotti reali per keyword: {keyword}")
-        items = amazon.search_products(keywords=keyword, item_count=int(config["ITEM_COUNT"]))
-        products = []
-
+        items = amazon.search_products(keywords=keyword, search_index="All", item_count=item_count)
         for item in items:
             products.append({
                 "title": item.title,
                 "url": item.detail_page_url,
-                "price": getattr(item, 'price_and_currency', "N/A"),
-                "image_url": item.images[0].url if item.images else None,
-                "description": getattr(item, 'features', [""])[0]
+                "price": item.price_and_currency[0] if item.price_and_currency else "N/A",
+                "description": item.features[0] if item.features else "Descrizione non disponibile",
+                "image": item.images[0].url if item.images else None
             })
-        return products
-
     except Exception as e:
-        logging.error(f"Errore API Amazon: {e}")
-        return []
+        logging.error(f"Errore API Amazon: {str(e)}")
+    return products
