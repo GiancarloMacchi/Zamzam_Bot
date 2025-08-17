@@ -3,7 +3,7 @@
   "AMAZON_SECRET_KEY": "INSERISCI_LA_TUA_CHIAVE",
   "AMAZON_ASSOCIATE_TAG": "iltuotag-21",
   "AMAZON_COUNTRY": "it",
-  "KEYWORDS": "regali bambino, regali mamma, regali papà, lego, scuola",
+  "KEYWORDS": ["regali bambino", "regali mamma", "regali papà", "lego", "scuola"],
   "MIN_SAVE": "10",
   "ITEM_COUNT": "5",
   "TELEGRAM_BOT_TOKEN": "INSERISCI_IL_TOKEN",
