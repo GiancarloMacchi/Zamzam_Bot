@@ -11,11 +11,6 @@ DRY_RUN = config.get("DRY_RUN", "True") == "True"
 def send_telegram_message(title, url, price=None, image_url=None):
     """
     Invia un messaggio su Telegram. Se DRY_RUN è True, stampa solo il messaggio.
-    
-    title: titolo del prodotto
-    url: link al prodotto
-    price: prezzo (opzionale)
-    image_url: URL immagine prodotto (opzionale)
     """
     message = f"🔹 <b>{title}</b>\n{url}"
     if price:
