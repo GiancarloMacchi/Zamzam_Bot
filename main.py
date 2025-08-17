@@ -1,48 +1,58 @@
+import json
 import logging
 import time
-from config import load_config
 from amazon_api import search_amazon
 from telegram_bot import send_telegram_message
 
-# Configurazione logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# Carica configurazione
+with open("config.json", "r") as f:
+    config = json.load(f)
+
+DRY_RUN = config.get("DRY_RUN", True)
+KEYWORDS = config.get("KEYWORDS", [])
+
+logger = logging.getLogger(__name__)
 
 def main():
-    config = load_config()
-    keywords = config.get("KEYWORDS", ["regali bambino", "regali mamma", "regali papà", "lego", "scuola"])
+    logger.info("Avvio bot Amazon…")
 
-    logging.info("Avvio bot Amazon…")
+    for keyword in KEYWORDS:
+        logger.info(f"Cercando prodotti per: {keyword}")
+        products = search_amazon(keyword, config)
 
-    for keyword in keywords:
-        logging.info(f"Cercando prodotti per: {keyword}")
+        if not products:
+            continue
 
-        # Chiamata API Amazon con retry
-        success = False
-        for attempt in range(3):
-            try:
-                results = search_amazon(config, keyword)
-                if results:
-                    logging.info(f"Trovati {len(results)} risultati per '{keyword}'")
+        for product in products:
+            title = product.get("title", "Nessun titolo")
+            url = product.get("url", "#")
+            price = product.get("price", "N/A")
+            image = product.get("image", "")
+            description = product.get("description", "")
 
-                    for item in results:
-                        message = f"🎁 {item['title']}\n{item['url']}"
-                        send_telegram_message(config, message)
+            message = (
+                f"🔹 <b>{title}</b>\n"
+                f"{url}\n"
+                f"💰 Prezzo: {price}\n"
+                f"{description}\n"
+                f"Immagine: {image}"
+            )
 
-                    success = True
-                    break
-            except Exception as e:
-                logging.warning(f"Errore API Amazon: {e} - Tentativo {attempt + 1}/3")
-                time.sleep(10)
+            if DRY_RUN:
+                logger.info(f"[DRY RUN] Messaggio Telegram:\n{message}")
+            else:
+                send_telegram_message(message)
 
-        if not success:
-            logging.error(f"Falliti tutti i tentativi per keyword: {keyword}")
+            # Attesa di 30 minuti tra un prodotto e l'altro
+            logger.info("Attendo 30 minuti prima della prossima offerta...")
+            time.sleep(1800)  # 1800 secondi = 30 minuti
 
-    logging.info("Esecuzione completata.")
-
+    logger.info("Esecuzione completata.")
 
 if __name__ == "__main__":
     main()
