@@ -5,6 +5,7 @@ import requests
 from datetime import datetime
 from urllib.parse import quote, urlencode
 from config import load_config
+import xml.etree.ElementTree as ET
 
 config = load_config()
 
@@ -22,18 +23,20 @@ ENDPOINTS = {
 
 def sign_request(params, endpoint):
     """
-    Firma la richiesta per Amazon PA-API.
+    Firma corretta per PA-API secondo le specifiche Amazon.
     """
     params["Timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     sorted_params = sorted(params.items())
-    canonical_query_string = urlencode(sorted_params, quote_via=quote)
+    canonical_query_string = "&".join(f"{quote(k, safe='')}={quote(str(v), safe='')}" for k, v in sorted_params)
     string_to_sign = f"GET\n{endpoint}\n/onca/xml\n{canonical_query_string}"
-    signature = base64.b64encode(hmac.new(
-        AMAZON_SECRET_KEY.encode("utf-8"),
-        string_to_sign.encode("utf-8"),
-        hashlib.sha256
-    ).digest()).decode()
-    return canonical_query_string + "&Signature=" + quote(signature)
+
+    signature = base64.b64encode(
+        hmac.new(AMAZON_SECRET_KEY.encode("utf-8"),
+                 string_to_sign.encode("utf-8"),
+                 hashlib.sha256).digest()
+    ).decode()
+
+    return canonical_query_string + "&Signature=" + quote(signature, safe='')
 
 def search_amazon(keyword):
     """
@@ -57,8 +60,6 @@ def search_amazon(keyword):
 
     products = []
     if response.status_code == 200:
-        # parsing XML base (puoi usare xml.etree.ElementTree o altro)
-        import xml.etree.ElementTree as ET
         tree = ET.fromstring(response.content)
         for item in tree.findall(".//Item")[:ITEM_COUNT]:
             title = item.findtext(".//Title")
@@ -72,5 +73,5 @@ def search_amazon(keyword):
                 "image_url": image_url or None
             })
     else:
-        print(f"Errore API Amazon: {response.status_code}")
+        print(f"Errore API Amazon: {response.status_code} - {response.text}")
     return products
