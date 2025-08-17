@@ -1,35 +1,14 @@
 import logging
 from config import load_config
 from telegram_bot import send_telegram_message
-import requests
-from urllib.parse import quote
+from amazon_api import search_amazon
 
 config = load_config()
 DRY_RUN = config.get("DRY_RUN", "True") == "True"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-AMAZON_ACCESS_KEY = config["AMAZON_ACCESS_KEY"]
-AMAZON_SECRET_KEY = config["AMAZON_SECRET_KEY"]
-AMAZON_ASSOCIATE_TAG = config["AMAZON_ASSOCIATE_TAG"]
-AMAZON_COUNTRY = config["AMAZON_COUNTRY"]
-KEYWORDS = config["KEYWORDS"]  # adesso è una lista
-ITEM_COUNT = int(config["ITEM_COUNT"])
-
-def search_amazon(keyword):
-    """
-    Semplice simulazione ricerca Amazon tramite URL.
-    Restituisce lista di prodotti come dizionari: title, url, price, image_url
-    """
-    products = []
-    for i in range(1, ITEM_COUNT+1):
-        products.append({
-            "title": f"{keyword} Prodotto {i}",
-            "url": f"https://www.amazon.{AMAZON_COUNTRY}/dp/EXAMPLE{i}",
-            "price": f"{10*i},99€",
-            "image_url": f"https://via.placeholder.com/150?text={quote(keyword)}+{i}"
-        })
-    return products
+KEYWORDS = config["KEYWORDS"]
 
 def main():
     logging.info("Avvio bot Amazon…")
