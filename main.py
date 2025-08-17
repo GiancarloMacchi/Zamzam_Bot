@@ -13,7 +13,7 @@ AMAZON_ACCESS_KEY = config["AMAZON_ACCESS_KEY"]
 AMAZON_SECRET_KEY = config["AMAZON_SECRET_KEY"]
 AMAZON_ASSOCIATE_TAG = config["AMAZON_ASSOCIATE_TAG"]
 AMAZON_COUNTRY = config["AMAZON_COUNTRY"]
-KEYWORDS = [kw.strip() for kw in config["KEYWORDS"].split(",")]
+KEYWORDS = config["KEYWORDS"]  # adesso è una lista
 ITEM_COUNT = int(config["ITEM_COUNT"])
 
 def search_amazon(keyword):
@@ -21,7 +21,6 @@ def search_amazon(keyword):
     Semplice simulazione ricerca Amazon tramite URL.
     Restituisce lista di prodotti come dizionari: title, url, price, image_url
     """
-    # Questo è un esempio. Qui dovrai sostituire con una vera chiamata API Amazon PA-API
     products = []
     for i in range(1, ITEM_COUNT+1):
         products.append({
