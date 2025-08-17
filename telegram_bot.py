@@ -25,10 +25,7 @@ def send_telegram_message(title, url, price=None, image_url=None):
         logging.info(f"[DRY RUN] Messaggio Telegram:\n{message}\nImmagine: {image_url}")
         return
 
-    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
     if image_url:
-        # Invio foto con didascalia
         telegram_url_photo = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
         payload_photo = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -38,7 +35,7 @@ def send_telegram_message(title, url, price=None, image_url=None):
         }
         response = requests.post(telegram_url_photo, data=payload_photo)
     else:
-        # Invio solo messaggio testuale
+        telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
             "chat_id": TELEGRAM_CHAT_ID,
             "text": message,
