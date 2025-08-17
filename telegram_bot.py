@@ -1,17 +1,13 @@
 import logging
+import time
 
-try:
-    from telegram import Bot
-except ImportError:
-    logging.warning("python-telegram-bot non installato, DRY_RUN abilitato")
-    Bot = None
-
-from config import load_config
-
-def send_telegram_message(message, dry_run=True):
-    if dry_run or Bot is None:
-        logging.info(f"[DRY RUN] Messaggio Telegram:\n{message}")
-    else:
-        config = load_config()
-        bot = Bot(token=config["TELEGRAM_BOT_TOKEN"])
-        bot.send_message(chat_id=config["TELEGRAM_CHAT_ID"], text=message, parse_mode='HTML')
+def send_messages_with_interval(products, interval_minutes=30, DRY_RUN=True):
+    for product in products:
+        message = f"🔹 <b>{product['title']}</b>\n{product['url']}\n💰 Prezzo: {product['price']}\n{product['description']}\nImmagine: {product['image']}"
+        if DRY_RUN:
+            logging.info(f"[DRY RUN] Messaggio Telegram:\n{message}")
+        else:
+            # Inserisci qui il codice reale per inviare su Telegram
+            pass
+        logging.info(f"Attendo {interval_minutes} minuti prima della prossima offerta...")
+        time.sleep(interval_minutes * 60)
