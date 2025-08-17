@@ -1,39 +1,52 @@
-import logging
 import requests
+import logging
+from config import load_config
 
-class TelegramBot:
-    def __init__(self, token, chat_id):
-        self.token = token
-        self.chat_id = chat_id
-        self.api_url = f"https://api.telegram.org/bot{self.token}"
+config = load_config()
 
-    def send_message(self, text, image_url=None):
-        """Invia un messaggio su Telegram. Se image_url è presente, manda una foto con didascalia."""
-        try:
-            if image_url:
-                logging.info("🖼️ Invio messaggio con immagine a Telegram...")
-                url = f"{self.api_url}/sendPhoto"
-                payload = {
-                    "chat_id": self.chat_id,
-                    "caption": text,
-                    "parse_mode": "HTML"
-                }
-                files = {
-                    "photo": requests.get(image_url, stream=True).raw
-                }
-                response = requests.post(url, data=payload, files={"photo": (image_url, files["photo"])})
-            else:
-                logging.info("✉️ Invio messaggio testuale a Telegram...")
-                url = f"{self.api_url}/sendMessage"
-                payload = {
-                    "chat_id": self.chat_id,
-                    "text": text,
-                    "parse_mode": "HTML"
-                }
-                response = requests.post(url, data=payload)
+TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = config["TELEGRAM_CHAT_ID"]
+DRY_RUN = config.get("DRY_RUN", "True") == "True"
 
-            response.raise_for_status()
-            logging.info("✅ Messaggio inviato con successo a Telegram!")
+def send_telegram_message(title, url, price=None, image_url=None):
+    """
+    Invia un messaggio su Telegram. Se DRY_RUN è True, stampa solo il messaggio.
+    
+    title: titolo del prodotto
+    url: link al prodotto
+    price: prezzo (opzionale)
+    image_url: URL immagine prodotto (opzionale)
+    """
+    message = f"🔹 <b>{title}</b>\n{url}"
+    if price:
+        message += f"\n💰 Prezzo: {price}"
 
-        except Exception as e:
-            logging.error(f"❌ Errore nell'invio del messaggio Telegram: {e}")
+    if DRY_RUN:
+        logging.info(f"[DRY RUN] Messaggio Telegram:\n{message}\nImmagine: {image_url}")
+        return
+
+    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+    if image_url:
+        # Invio foto con didascalia
+        telegram_url_photo = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+        payload_photo = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "photo": image_url,
+            "caption": message,
+            "parse_mode": "HTML"
+        }
+        response = requests.post(telegram_url_photo, data=payload_photo)
+    else:
+        # Invio solo messaggio testuale
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+        response = requests.post(telegram_url, data=payload)
+
+    if response.status_code != 200:
+        logging.error(f"Errore invio Telegram: {response.text}")
+    else:
+        logging.info(f"Messaggio inviato correttamente: {title}")
