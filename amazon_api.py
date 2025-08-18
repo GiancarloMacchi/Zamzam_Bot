@@ -9,9 +9,11 @@ def search_amazon(keyword, config):
     tag=config['AMAZON_ASSOCIATE_TAG'],
     country=config['AMAZON_COUNTRY']
 )
-        products = client.search_items(keywords=keyword, item_count=int(config['ITEM_COUNT']))
-        results = []
-        for p in products:
+        search_results = client.search_items(keywords=keyword, item_count=int(config['ITEM_COUNT']))
+products = search_results.items
+results = []
+if products: # Aggiunto un controllo per assicurarsi che la lista non sia vuota
+    for p in products:
             if p.price_and_currency and p.original_price and p.original_price[0] > 0:
                 discount_percentage = ((p.original_price[0] - p.price_and_currency[0]) / p.original_price[0]) * 100
                 if discount_percentage >= int(config['MIN_SAVE']):
