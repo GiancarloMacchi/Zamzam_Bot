@@ -1,8 +1,9 @@
 import telegram
 import logging
 import time
+import asyncio
 
-def send_telegram_message(config, products_list, keyword):
+async def send_telegram_message(config, products_list, keyword):
     try:
         if not products_list:
             logging.info(f"Nessun prodotto trovato per: {keyword}")
@@ -21,10 +22,9 @@ def send_telegram_message(config, products_list, keyword):
         logging.debug(f'Set Bot API URL: {bot.base_url}')
         logging.debug(f'Set Bot API File URL: {bot.base_file_url}')
 
-        bot.send_message(chat_id=config["TELEGRAM_CHAT_ID"], text=message, parse_mode='Markdown')
+        await bot.send_message(chat_id=config["TELEGRAM_CHAT_ID"], text=message, parse_mode='Markdown')
         
         logging.info("Messaggio inviato su Telegram")
-        time.sleep(5)
         
     except Exception as e:
         logging.error(f"Errore durante l'invio del messaggio Telegram: {e}")
