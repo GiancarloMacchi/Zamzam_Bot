@@ -2,6 +2,8 @@ import telegram
 import logging
 import asyncio
 from telegram.error import TelegramError
+import json
+import random
 
 async def send_telegram_message(config, products_list, keyword):
     try:
@@ -9,14 +11,29 @@ async def send_telegram_message(config, products_list, keyword):
             logging.info(f"Nessun prodotto trovato per: {keyword}")
             return
         
+        # Carica le frasi dal file JSON
+        try:
+            with open('phrases.json', 'r') as f:
+                phrases_data = json.load(f)
+        except FileNotFoundError:
+            logging.error("File 'phrases.json' non trovato.")
+            phrases_data = {"kids": [], "default": []}
+
         bot = telegram.Bot(token=config["TELEGRAM_BOT_TOKEN"])
         
         for p in products_list:
+            # Sceglie una frase casuale dalla categoria 'kids' o 'default'
+            category_phrases = phrases_data.get("kids", []) if keyword in ["giocattoli", "bambini", "scuola", "piscina", "lego"] else phrases_data.get("default", [])
+            random_phrase = random.choice(category_phrases) if category_phrases else "Un affare da non perdere!"
+
             message = ""
+            message += f"{random_phrase}\n\n"
             message += f"**🤩 {p['title']}**\n"
-            message += f"Sconto: {p['discount']}% 🔥\n"
-            message += f"Prezzo: {p['price']}€\n"
-            message += f"Link: {p['url']}\n\n"
+            
+            # Modifiche per evidenziare Prezzo, Sconto e Link
+            message += f"💰 Prezzo: **{p['price']}€**\n"
+            message += f"🔥 Sconto: **{p['discount']}%**\n"
+            message += f"🔗 Link: **{p['url']}**\n\n"
             
             try:
                 if p.get('image'):
