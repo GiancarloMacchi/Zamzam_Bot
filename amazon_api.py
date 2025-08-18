@@ -20,7 +20,6 @@ def search_amazon(keyword, config):
         results = []
         if products:
             for p in products:
-                # Usa una logica più robusta per gestire gli attributi mancanti
                 if not hasattr(p, 'title') or not hasattr(p, 'detail_page_url') or not hasattr(p, 'price') or not hasattr(p.price, 'amount'):
                     logging.warning("Skipping product due to missing required attributes (title, url, or price).")
                     continue
@@ -32,14 +31,11 @@ def search_amazon(keyword, config):
                 list_price_amount = None
                 discount_percentage = 0
                 
-                # Se esiste, calcola lo sconto in base al prezzo di listino
                 if hasattr(p, 'list_price') and hasattr(p.list_price, 'amount') and p.list_price.amount > 0:
                     list_price_amount = p.list_price.amount
                     discount_percentage = ((list_price_amount - price_amount) / list_price_amount) * 100
                 
-                # Aggiungi il prodotto se supera la soglia di sconto
                 if discount_percentage >= int(config['MIN_SAVE']):
-                    # Controlla che esista anche l'immagine, altrimenti il post Telegram non funzionerà
                     image_url = p.image_url if hasattr(p, 'image_url') else None
                     
                     if image_url:
