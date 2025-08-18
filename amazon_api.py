@@ -32,33 +32,29 @@ def search_amazon(keyword, config):
 
         results = []
         for p in products:
-            # Titolo fallback
-            title = getattr(p, "title", None)
-            if not title and hasattr(p, "item_info") and hasattr(p.item_info, "title"):
-                title = getattr(p.item_info.title, "display_value", None)
+            # Titolo
+            title = None
+            if hasattr(p, "title") and hasattr(p.title, "display_value"):
+                title = p.title.display_value
 
             # URL
-            url = getattr(p, "detail_page_url", None)
+            url = None
+            if hasattr(p, "detail_page_url"):
+                url = p.detail_page_url
 
-            # Prezzo fallback
+            # Prezzo corrente
             price_amount = None
-            if hasattr(p, "price") and hasattr(p.price, "amount"):
-                price_amount = p.price.amount
-            elif hasattr(p, "offers") and hasattr(p.offers, "listings"):
-                try:
+            if hasattr(p, "offers") and hasattr(p.offers, "listings") and p.offers.listings:
+                if hasattr(p.offers.listings[0], "price") and hasattr(p.offers.listings[0].price, "amount"):
                     price_amount = p.offers.listings[0].price.amount
-                except Exception:
-                    pass
 
-            # Prezzo di listino (per calcolo sconto)
+            # Prezzo di listino (per calcolo sconto), controlla in due posizioni
             list_price_amount = None
             if hasattr(p, "list_price") and hasattr(p.list_price, "amount"):
                 list_price_amount = p.list_price.amount
-            elif hasattr(p, "offers") and hasattr(p.offers, "listings"):
-                try:
-                    list_price_amount = p.offers.listings[0].price.savings_basis
-                except Exception:
-                    pass
+            elif hasattr(p, "offers") and hasattr(p.offers, "listings") and p.offers.listings:
+                if hasattr(p.offers.listings[0], "saving_basis") and hasattr(p.offers.listings[0].saving_basis, "amount"):
+                    list_price_amount = p.offers.listings[0].saving_basis.amount
 
             # Se mancano i campi essenziali, skip
             if not title or not url or not price_amount:
@@ -72,9 +68,12 @@ def search_amazon(keyword, config):
 
             logging.info(f"Prodotto '{title}' - Prezzo: {price_amount}, Prezzo di Listino: {list_price_amount}, Sconto Calcolato: {discount_percentage}%")
 
-            # **CORREZIONE**: Aggiungi la condizione per i prodotti senza sconto
+            # Condizione di pubblicazione
             if discount_percentage >= int(config['MIN_SAVE']) or list_price_amount is None:
-                image_url = getattr(p, "image_url", None)
+                image_url = None
+                if hasattr(p, 'images') and hasattr(p.images, 'primary') and hasattr(p.images.primary, 'large'):
+                    image_url = p.images.primary.large.url
+                
                 if image_url:
                     results.append({
                         "title": title,
