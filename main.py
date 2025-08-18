@@ -1,9 +1,8 @@
 import os
 import logging
 import asyncio
-
-from amazon_api import search_amazon
-from telegram_bot import send_telegram_message
+import telegram
+from datetime import datetime
 
 # Configurazione del logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,6 +21,9 @@ config = {
     'ITEM_COUNT': int(os.environ.get('ITEM_COUNT'))
 }
 
+from amazon_api import search_amazon
+from telegram_bot import send_telegram_message
+
 async def main():
     logging.info("Avvio bot Amazon…")
     
@@ -29,7 +31,6 @@ async def main():
         try:
             products = search_amazon(keyword, config)
             if products:
-                # La logica di invio è ora in telegram_bot.py
                 await send_telegram_message(config, products, keyword)
             
             # Pausa di 60 secondi tra le parole chiave per non stressare l'API di Amazon
@@ -41,9 +42,31 @@ async def main():
     logging.info("Esecuzione completata.")
 
 async def run_bot_loop():
+    bot = telegram.Bot(token=config["TELEGRAM_BOT_TOKEN"])
+    
     while True:
+        now = datetime.now()
+        
+        # Calcola il tempo rimanente fino alle 7:30
+        if now.hour < 7 or (now.hour == 7 and now.minute < 30):
+            # Calcola i secondi rimanenti
+            next_run = now.replace(hour=7, minute=30, second=0, microsecond=0)
+            wait_seconds = (next_run - now).total_seconds()
+            logging.info(f"Il bot si mette a riposo fino alle 7:30. Riprenderà tra {int(wait_seconds/60)} minuti.")
+            await asyncio.sleep(wait_seconds)
+        
+            # Invia il messaggio introduttivo una sola volta al mattino
+            intro_message = f"🥳 **Ecco le migliori offerte di René per oggi!**\n\n"
+            await bot.send_message(chat_id=config["TELEGRAM_CHAT_ID"], text=intro_message, parse_mode='Markdown')
+
         await main()
-        await asyncio.sleep(3600) # Pausa di 1 ora per le esecuzioni successive
+        
+        # Dopo le 23:59, il bot attende il giorno dopo
+        if now.hour >= 23 and now.minute >= 59:
+             wait_seconds = (now.replace(hour=7, minute=30, second=0, day=now.day+1) - now).total_seconds()
+             logging.info(f"Il bot si mette a riposo notturno. Riprenderà tra {int(wait_seconds/60)} minuti.")
+             await asyncio.sleep(wait_seconds)
+
 
 if __name__ == "__main__":
     if config['RUN_ONCE']:
