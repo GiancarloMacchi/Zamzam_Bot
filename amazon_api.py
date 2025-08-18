@@ -70,6 +70,8 @@ def search_amazon(keyword, config):
             if list_price_amount and list_price_amount > 0:
                 discount_percentage = ((list_price_amount - price_amount) / list_price_amount) * 100
 
+            logging.info(f"Prodotto '{title}' - Prezzo: {price_amount}, Prezzo di Listino: {list_price_amount}, Sconto Calcolato: {discount_percentage}%")
+
             if discount_percentage >= int(config['MIN_SAVE']):
                 image_url = getattr(p, "image_url", None)
                 if image_url:
