@@ -11,12 +11,6 @@ async def send_telegram_message(config, products_list, keyword):
         
         bot = telegram.Bot(token=config["TELEGRAM_BOT_TOKEN"])
         
-        # Frase di introduzione personalizzata
-        intro_message = f"🥳 Ciao a tutti! Oggi René e i suoi amici hanno trovato delle offerte super divertenti su Amazon!\n\n"
-        
-        # Invio del messaggio introduttivo
-        await bot.send_message(chat_id=config["TELEGRAM_CHAT_ID"], text=intro_message, parse_mode='Markdown')
-        
         for p in products_list:
             message = ""
             message += f"**🤩 {p['title']}**\n"
@@ -24,7 +18,6 @@ async def send_telegram_message(config, products_list, keyword):
             message += f"Prezzo: {p['price']}€\n"
             message += f"Link: {p['url']}\n\n"
             
-            # Invio del post con immagine e didascalia
             try:
                 if p.get('image'):
                     await bot.send_photo(
@@ -36,7 +29,7 @@ async def send_telegram_message(config, products_list, keyword):
                 else:
                     await bot.send_message(
                         chat_id=config["TELEGRAM_CHAT_ID"],
-                        text=f"{message}\n\n⚠️ Immagine non disponibile.",
+                        text=message,
                         parse_mode='Markdown'
                     )
             except TelegramError as te:
@@ -47,7 +40,15 @@ async def send_telegram_message(config, products_list, keyword):
                     parse_mode='Markdown'
                 )
 
-            await asyncio.sleep(5)  # Pausa di 5 secondi tra i post per evitare limitazioni di Telegram
+            await asyncio.sleep(300) # Pausa di 5 minuti tra i post
+        
+        # Frase di chiusura
+        ending_text = "✨ C'è una soluzione per ogni problema, e un gioco per ogni sorriso! Trova il tuo preferito per divertirti con René! ✨"
+        await bot.send_message(
+            chat_id=config["TELEGRAM_CHAT_ID"],
+            text=ending_text,
+            parse_mode='Markdown'
+        )
         
         logging.info(f"Offerte inviate per la parola chiave: {keyword}")
         
