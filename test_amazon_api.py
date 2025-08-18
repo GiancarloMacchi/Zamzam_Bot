@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 from amazon_paapi import AmazonApi
 
@@ -19,17 +20,32 @@ print("==========================\n")
 try:
     amazon = AmazonApi(ACCESS_KEY, SECRET_KEY, ASSOCIATE_TAG, COUNTRY)
     results = amazon.search_items(keywords="laptop", item_count=1)
+
     items = []
     if hasattr(results, "items"):
         items = results.items
     elif results:
         items = list(results)
+
     if items:
         item0 = items[0]
+
+        # Stampa titolo fallback
         title = getattr(item0, "title", None) or getattr(getattr(getattr(item0, "item_info", None), "title", None), "display_value", None)
         print("✅ API OK. Titolo:", title or "(sconosciuto)")
+
+        # Dump completo del prodotto in JSON
+        try:
+            raw = item0.__dict__
+            print("\n--- Dump completo primo prodotto ---")
+            print(json.dumps(raw, indent=2, default=str))
+            print("------------------------------------\n")
+        except Exception as e:
+            print("⚠ Impossibile serializzare il prodotto:", e)
+
     else:
         print("⚠ API risponde ma nessun item.")
+
 except Exception as e:
     err = str(e)
     print("❌ Errore API:", err)
