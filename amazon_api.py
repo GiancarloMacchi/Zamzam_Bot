@@ -72,7 +72,8 @@ def search_amazon(keyword, config):
 
             logging.info(f"Prodotto '{title}' - Prezzo: {price_amount}, Prezzo di Listino: {list_price_amount}, Sconto Calcolato: {discount_percentage}%")
 
-            if discount_percentage >= int(config['MIN_SAVE']):
+            # **CORREZIONE**: Aggiungi la condizione per i prodotti senza sconto
+            if discount_percentage >= int(config['MIN_SAVE']) or list_price_amount is None:
                 image_url = getattr(p, "image_url", None)
                 if image_url:
                     results.append({
