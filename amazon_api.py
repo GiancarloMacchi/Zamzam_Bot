@@ -14,6 +14,10 @@ def search_amazon(keyword, config):
             item_count=int(config['ITEM_COUNT'])
         )
         products = search_results.items
+        
+        # Aggiungi questa riga per il debug
+        logging.info(f"Trovati {len(products) if products else 0} prodotti per la keyword: {keyword}")
+
         results = []
         if products:
             for p in products:
