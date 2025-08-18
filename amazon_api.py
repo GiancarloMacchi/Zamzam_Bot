@@ -14,21 +14,28 @@ def search_amazon(keyword, config):
             country=config['AMAZON_COUNTRY']
         )
         
-        products = amazon.search_items(keywords=keyword)
+        products_response = amazon.search_items(keywords=keyword)
         
-        # Accesso corretto alla lista dei prodotti
-        items_list = products.items
+        items_list = products_response.items
         
         logging.info(f"Trovati {len(items_list)} prodotti per la keyword: {keyword}")
 
         products_list = []
-        for p in items_list: # Loop sulla lista corretta
+        for p in items_list:
             product = {
-                'title': p.title,
-                'url': p.url,
-                'price': p.price,
-                'discount': p.discount
+                'title': p.item_info.title.display_value if p.item_info and p.item_info.title else None,
+                'url': p.detail_page_url,
+                'price': None,
+                'discount': None
             }
+            
+            # Controllo se esistono offerte per il prodotto
+            if p.offers and p.offers.listings:
+                listing = p.offers.listings[0]
+                if listing.price and listing.price.amount:
+                    product['price'] = listing.price.amount
+                if listing.price and listing.price.savings and listing.price.savings.percentage:
+                    product['discount'] = listing.price.savings.percentage
 
             if product['title'] and product['url'] and product['price']:
                 # Controlla se il prodotto ha uno sconto sufficiente
