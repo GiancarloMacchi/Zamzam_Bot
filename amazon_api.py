@@ -50,7 +50,7 @@ def search_amazon(keyword, config):
                 except Exception:
                     pass
 
-            # Prezzo di listino (per sconto)
+            # Prezzo di listino (per calcolo sconto)
             list_price_amount = None
             if hasattr(p, "list_price") and hasattr(p.list_price, "amount"):
                 list_price_amount = p.list_price.amount
