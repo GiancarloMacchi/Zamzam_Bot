@@ -40,10 +40,13 @@ async def main():
             
     logging.info("Esecuzione completata.")
 
+async def run_bot_loop():
+    while True:
+        await main()
+        await asyncio.sleep(3600) # Pausa di 1 ora per le esecuzioni successive
+
 if __name__ == "__main__":
     if config['RUN_ONCE']:
         asyncio.run(main())
     else:
-        while True:
-            asyncio.run(main())
-            await asyncio.sleep(3600) # Pausa di 1 ora per le esecuzioni successive
+        asyncio.run(run_bot_loop())
