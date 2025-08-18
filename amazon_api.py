@@ -3,7 +3,7 @@ from amazon_paapi import AmazonApi
 
 def search_amazon(keyword, config):
     try:
-        client = AmazonAPI(
+        client = AmazonApi(
             access_key=config['AMAZON_ACCESS_KEY'],
             secret_key=config['AMAZON_SECRET_KEY'],
             associate_tag=config['AMAZON_ASSOCIATE_TAG'],
