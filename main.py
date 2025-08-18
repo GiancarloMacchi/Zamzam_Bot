@@ -1,60 +1,48 @@
+import os
 import logging
 import time
-import os
+import asyncio
+
 from amazon_api import search_amazon
 from telegram_bot import send_telegram_message
 
-# Logging a livello DEBUG per avere tutti i dettagli
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configurazione del logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Variabili di configurazione lette dalle Secrets
+config = {
+    'AMAZON_ACCESS_KEY': os.environ.get('AMAZON_ACCESS_KEY'),
+    'AMAZON_SECRET_KEY': os.environ.get('AMAZON_SECRET_KEY'),
+    'AMAZON_ASSOCIATE_TAG': os.environ.get('AMAZON_ASSOCIATE_TAG'),
+    'AMAZON_COUNTRY': os.environ.get('AMAZON_COUNTRY'),
+    'TELEGRAM_BOT_TOKEN': os.environ.get('TELEGRAM_BOT_TOKEN'),
+    'TELEGRAM_CHAT_ID': os.environ.get('TELEGRAM_CHAT_ID'),
+    'KEYWORDS': os.environ.get('KEYWORDS').split(','),
+    'MIN_SAVE': int(os.environ.get('MIN_SAVE')),
+    'RUN_ONCE': os.environ.get('RUN_ONCE', 'false').lower() == 'true',
+    'ITEM_COUNT': int(os.environ.get('ITEM_COUNT'))
+}
 
-def get_config():
-    return {
-        'AMAZON_ACCESS_KEY': os.getenv('AMAZON_ACCESS_KEY'),
-        'AMAZON_SECRET_KEY': os.getenv('AMAZON_SECRET_KEY'),
-        'AMAZON_ASSOCIATE_TAG': os.getenv('AMAZON_ASSOCIATE_TAG'),
-        'AMAZON_COUNTRY': os.getenv('AMAZON_COUNTRY', 'it'),
-        'TELEGRAM_BOT_TOKEN': os.getenv('TELEGRAM_BOT_TOKEN'),
-        'TELEGRAM_CHAT_ID': os.getenv('TELEGRAM_CHAT_ID'),
-        'KEYWORDS': os.getenv('KEYWORDS', 'offerte del giorno').split(','),
-        'MIN_SAVE': int(os.getenv('MIN_SAVE', 10)),
-        'ITEM_COUNT': int(os.getenv('ITEM_COUNT', 5))
-    }
-
-
-def main():
-    config = get_config()
-    keywords = [kw.strip() for kw in config['KEYWORDS']]
-
-    if not keywords:
-        logging.warning("Nessuna parola chiave trovata. Il bot si ferma.")
-        return
-
+async def main():
     logging.info("Avvio bot Amazon…")
-
-    for keyword in keywords:
-        logging.info(f"Cercando prodotti per: {keyword}")
+    
+    for keyword in config['KEYWORDS']:
         try:
             products = search_amazon(keyword, config)
             if products:
-                message = f"✨ Offerte Amazon per **{keyword}** ✨\n\n"
-                for p in products:
-                    message += f"**{p['title']}**\n"
-                    message += f"💰 Prezzo: {p['price']}€ (Sconto: {p['discount']}%)\n"
-                    message += f"➡️ [Link all'offerta]({p['url']})\n\n"
-
-                send_telegram_message(config, message)
-                logging.info(f"Offerte inviate per la parola chiave: {keyword}")
-            else:
-                logging.info(f"Nessun prodotto trovato per: {keyword}")
-
+                await send_telegram_message(config, products, keyword)
+                
+            time.sleep(10) # Pausa tra una ricerca e l'altra
+            
         except Exception as e:
-            logging.error(f"Errore durante l'esecuzione per la parola chiave '{keyword}': {e}")
-
-        time.sleep(10)  # Pausa tra una ricerca e l'altra per evitare ban
-
+            logging.error(f"Errore generale per la parola chiave {keyword}: {e}")
+            
     logging.info("Esecuzione completata.")
 
-
 if __name__ == "__main__":
-    main()
+    if config['RUN_ONCE']:
+        asyncio.run(main())
+    else:
+        while True:
+            asyncio.run(main())
+            time.sleep(3600)
