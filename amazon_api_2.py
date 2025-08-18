@@ -1,6 +1,6 @@
 import logging
 import os
-from amazon_paapi import AmazonApi
+from amazon_paapi.api import AmazonApi
 import time
 
 def search_amazon(keyword, config):
