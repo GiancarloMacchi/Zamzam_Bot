@@ -1,91 +1,73 @@
 import logging
-import json
-from amazon_paapi import AmazonApi
-
+from paapi5_python_sdk.api.default_api import DefaultApi
+from paapi5_python_sdk.models.search_items_request import SearchItemsRequest
+from paapi5_python_sdk.models.search_items_resource import SearchItemsResource
+from paapi5_python_sdk.rest import ApiException
+import time
 
 def search_amazon(keyword, config):
     try:
-        client = AmazonApi(
-            key=config['AMAZON_ACCESS_KEY'],
-            secret=config['AMAZON_SECRET_KEY'],
-            tag=config['AMAZON_ASSOCIATE_TAG'],
-            country=config['AMAZON_COUNTRY']
+        logging.info(f"Cercando prodotti per: {keyword}")
+
+        default_api = DefaultApi(
+            access_key=config['AMAZON_ACCESS_KEY'],
+            secret_key=config['AMAZON_SECRET_KEY'],
+            host='webservices.amazon.it',
+            region='eu-west-1'
         )
 
-        search_results = client.search_items(
+        search_items_request = SearchItemsRequest(
             keywords=keyword,
-            item_count=int(config['ITEM_COUNT'])
+            partner_tag=config['AMAZON_ASSOCIATE_TAG'],
+            partner_type='Associates',
+            marketplace='www.amazon.it',
+            item_count=config['ITEM_COUNT'],
+            resources=[
+                SearchItemsResource.ITEMINFO_TITLE,
+                SearchItemsResource.OFFERS_LISTINGS_PRICE,
+                SearchItemsResource.ITEMINFO_FEATURES
+            ]
         )
 
-        products = search_results.items
-        logging.info(f"Trovati {len(products) if products else 0} prodotti per la keyword: {keyword}")
+        response = default_api.search_items(search_items_request)
+        logging.info(f"Trovati {len(response.search_result.items)} prodotti per la keyword: {keyword}")
 
-        if not products:
-            return []
+        products_list = []
+        for item in response.search_result.items:
+            product = {
+                'asin': item.asin,
+                'url': item.detail_page_url,
+                'title': None,
+                'price': None,
+                'discount': None
+            }
 
-        # DEBUG: stampa il primo prodotto grezzo in JSON
-        try:
-            raw = products[0].__dict__
-            logging.debug("Primo prodotto grezzo:\n" + json.dumps(raw, indent=2, default=str))
-        except Exception as e:
-            logging.debug(f"Impossibile serializzare il primo prodotto: {e}")
+            # Estrazione del titolo
+            if item.item_info and item.item_info.title and item.item_info.title.display_value:
+                product['title'] = item.item_info.title.display_value
 
-        results = []
-        for p in products:
-            # Titolo
-            title = None
-            if hasattr(p, "title") and hasattr(p.title, "display_value"):
-                title = p.title.display_value
+            # Estrazione del prezzo e dello sconto
+            if item.offers and item.offers.listings:
+                listing = item.offers.listings[0]
+                if listing.price and listing.price.amount:
+                    product['price'] = listing.price.amount
+                if listing.savings and listing.savings.percentage:
+                    product['discount'] = listing.savings.percentage
 
-            # URL
-            url = None
-            if hasattr(p, "detail_page_url"):
-                url = p.detail_page_url
-
-            # Prezzo corrente
-            price_amount = None
-            if hasattr(p, "offers") and hasattr(p.offers, "listings") and p.offers.listings:
-                if hasattr(p.offers.listings[0], "price") and hasattr(p.offers.listings[0].price, "amount"):
-                    price_amount = p.offers.listings[0].price.amount
-
-            # Prezzo di listino (per calcolo sconto), controlla in due posizioni
-            list_price_amount = None
-            if hasattr(p, "list_price") and hasattr(p.list_price, "amount"):
-                list_price_amount = p.list_price.amount
-            elif hasattr(p, "offers") and hasattr(p.offers, "listings") and p.offers.listings:
-                if hasattr(p.offers.listings[0], "saving_basis") and hasattr(p.offers.listings[0].saving_basis, "amount"):
-                    list_price_amount = p.offers.listings[0].saving_basis.amount
-
-            # Se mancano i campi essenziali, skip
-            if not title or not url or not price_amount:
+            if product['title'] and product['url'] and product['price']:
+                # Controlla se il prodotto ha uno sconto sufficiente
+                if product['discount'] and product['discount'] >= config['MIN_SAVE']:
+                    products_list.append(product)
+                else:
+                    logging.warning(f"Skipping product per sconto non sufficiente: {product['title']} (sconto {product['discount']})")
+            else:
                 logging.warning("Skipping product per attributi mancanti (title, url o price).")
-                continue
 
-            # Calcolo sconto
-            discount_percentage = 0
-            if list_price_amount and list_price_amount > 0:
-                discount_percentage = ((list_price_amount - price_amount) / list_price_amount) * 100
+        return products_list
 
-            logging.info(f"Prodotto '{title}' - Prezzo: {price_amount}, Prezzo di Listino: {list_price_amount}, Sconto Calcolato: {discount_percentage}%")
-
-            # Condizione di pubblicazione
-            if discount_percentage >= int(config['MIN_SAVE']) or list_price_amount is None:
-                image_url = None
-                if hasattr(p, 'images') and hasattr(p.images, 'primary') and hasattr(p.images.primary, 'large'):
-                    image_url = p.images.primary.large.url
-                
-                if image_url:
-                    results.append({
-                        "title": title,
-                        "url": url,
-                        "price": price_amount,
-                        "original_price": list_price_amount,
-                        "image": image_url,
-                        "discount": int(discount_percentage)
-                    })
-
-        return results
-
+    except ApiException as e:
+        logging.error(f"Errore API Amazon: {e}")
+        return []
     except Exception as e:
-        logging.warning(f"Errore API Amazon: {e}")
+        logging.error(f"Errore sconosciuto: {e}")
         return []
