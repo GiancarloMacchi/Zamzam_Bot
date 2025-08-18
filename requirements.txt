@@ -1,4 +1,4 @@
 python-telegram-bot
 python-amazon-paapi
-paapi5-python-sdk
+python-amazon-paapi
 requests
