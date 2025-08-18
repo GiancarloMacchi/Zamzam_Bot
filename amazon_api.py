@@ -8,9 +8,9 @@ def search_amazon(keyword, config):
         logging.info(f"Cercando prodotti per: {keyword}")
 
         amazon = AmazonApi(
-            access_key=config['AMAZON_ACCESS_KEY'],
-            secret_key=config['AMAZON_SECRET_KEY'],
-            associate_tag=config['AMAZON_ASSOCIATE_TAG'],
+            key=config['AMAZON_ACCESS_KEY'],
+            secret=config['AMAZON_SECRET_KEY'],
+            tag=config['AMAZON_ASSOCIATE_TAG'],
             country=config['AMAZON_COUNTRY']
         )
         
