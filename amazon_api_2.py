@@ -1,58 +1,31 @@
 import logging
-from paapi5_python_sdk.api.default_api import DefaultApi
-from paapi5_python_sdk.models.search_items_request import SearchItemsRequest
-from paapi5_python_sdk.models.search_items_resource import SearchItemsResource
-from paapi5_python_sdk.rest import ApiException
+import os
+from amazon_paapi import AmazonAPI
 import time
 
 def search_amazon(keyword, config):
     try:
         logging.info(f"Cercando prodotti per: {keyword}")
 
-        default_api = DefaultApi(
+        amazon = AmazonAPI(
             access_key=config['AMAZON_ACCESS_KEY'],
             secret_key=config['AMAZON_SECRET_KEY'],
-            host='webservices.amazon.it',
-            region='eu-west-1'
+            associate_tag=config['AMAZON_ASSOCIATE_TAG'],
+            country=config['AMAZON_COUNTRY']
         )
-
-        search_items_request = SearchItemsRequest(
-            keywords=keyword,
-            partner_tag=config['AMAZON_ASSOCIATE_TAG'],
-            partner_type='Associates',
-            marketplace='www.amazon.it',
-            item_count=config['ITEM_COUNT'],
-            resources=[
-                SearchItemsResource.ITEMINFO_TITLE,
-                SearchItemsResource.OFFERS_LISTINGS_PRICE,
-                SearchItemsResource.ITEMINFO_FEATURES
-            ]
-        )
-
-        response = default_api.search_items(search_items_request)
-        logging.info(f"Trovati {len(response.search_result.items)} prodotti per la keyword: {keyword}")
+        
+        products = amazon.search_items(keywords=keyword)
+        
+        logging.info(f"Trovati {len(products)} prodotti per la keyword: {keyword}")
 
         products_list = []
-        for item in response.search_result.items:
+        for p in products:
             product = {
-                'asin': item.asin,
-                'url': item.detail_page_url,
-                'title': None,
-                'price': None,
-                'discount': None
+                'title': p.title,
+                'url': p.url,
+                'price': p.price,
+                'discount': p.discount
             }
-
-            # Estrazione del titolo
-            if item.item_info and item.item_info.title and item.item_info.title.display_value:
-                product['title'] = item.item_info.title.display_value
-
-            # Estrazione del prezzo e dello sconto
-            if item.offers and item.offers.listings:
-                listing = item.offers.listings[0]
-                if listing.price and listing.price.amount:
-                    product['price'] = listing.price.amount
-                if listing.savings and listing.savings.percentage:
-                    product['discount'] = listing.savings.percentage
 
             if product['title'] and product['url'] and product['price']:
                 # Controlla se il prodotto ha uno sconto sufficiente
@@ -65,9 +38,6 @@ def search_amazon(keyword, config):
 
         return products_list
 
-    except ApiException as e:
-        logging.error(f"Errore API Amazon: {e}")
-        return []
     except Exception as e:
-        logging.error(f"Errore sconosciuto: {e}")
+        logging.error(f"Errore durante la ricerca Amazon: {e}")
         return []
