@@ -9,7 +9,7 @@ def search_amazon(keyword, config):
     tag=config['AMAZON_ASSOCIATE_TAG'],
     country=config['AMAZON_COUNTRY']
 )
-        products = client.search_products(keywords=keyword, item_count=int(config['ITEM_COUNT']))
+        products = client.search_items(keywords=keyword, item_count=int(config['ITEM_COUNT']))
         results = []
         for p in products:
             if p.price_and_currency and p.original_price and p.original_price[0] > 0:
