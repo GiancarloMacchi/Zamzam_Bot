@@ -1,6 +1,5 @@
 import os
 import logging
-import time
 import asyncio
 
 from amazon_api import search_amazon
@@ -33,8 +32,8 @@ async def main():
                 # La logica di invio è ora in telegram_bot.py
                 await send_telegram_message(config, products, keyword)
             
-            # Pausa tra le parole chiave per non stressare l'API
-            time.sleep(60) 
+            # Pausa di 60 secondi tra le parole chiave per non stressare l'API di Amazon
+            await asyncio.sleep(60)
             
         except Exception as e:
             logging.error(f"Errore generale per la parola chiave {keyword}: {e}")
@@ -47,4 +46,4 @@ if __name__ == "__main__":
     else:
         while True:
             asyncio.run(main())
-            time.sleep(3600)
+            await asyncio.sleep(3600) # Pausa di 1 ora per le esecuzioni successive
