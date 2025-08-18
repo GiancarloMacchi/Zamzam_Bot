@@ -4,11 +4,11 @@ from amazon_paapi import AmazonApi
 def search_amazon(keyword, config):
     try:
         client = AmazonApi(
-            access_key=config['AMAZON_ACCESS_KEY'],
-            secret_key=config['AMAZON_SECRET_KEY'],
-            associate_tag=config['AMAZON_ASSOCIATE_TAG'],
-            country=config['AMAZON_COUNTRY']
-        )
+    key=config['AMAZON_ACCESS_KEY'],
+    secret=config['AMAZON_SECRET_KEY'],
+    tag=config['AMAZON_ASSOCIATE_TAG'],
+    country=config['AMAZON_COUNTRY']
+)
         products = client.search_products(keywords=keyword, item_count=int(config['ITEM_COUNT']))
         results = []
         for p in products:
