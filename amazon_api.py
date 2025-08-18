@@ -9,20 +9,24 @@ def search_amazon(keyword, config):
             tag=config['AMAZON_ASSOCIATE_TAG'],
             country=config['AMAZON_COUNTRY']
         )
-        search_results = client.search_items(keywords=keyword, item_count=int(config['ITEM_COUNT']))
+        search_results = client.search_items(
+            keywords=keyword, 
+            item_count=int(config['ITEM_COUNT'])
+        )
         products = search_results.items
         results = []
         if products:
             for p in products:
-                if p.price_and_currency and p.original_price and p.original_price[0] > 0:
-                    discount_percentage = ((p.original_price[0] - p.price_and_currency[0]) / p.original_price[0]) * 100
+                # Controlla se esistono entrambi i prezzi e se il prezzo di listino è maggiore di zero
+                if p.list_price and p.price and p.list_price.amount > 0:
+                    discount_percentage = ((p.list_price.amount - p.price.amount) / p.list_price.amount) * 100
                     if discount_percentage >= int(config['MIN_SAVE']):
                         results.append({
                             "title": p.title,
                             "url": p.detail_page_url,
-                            "price": p.price_and_currency[0],
-                            "original_price": p.original_price[0],
-                            "image": p.large_image_url,
+                            "price": p.price.amount,
+                            "original_price": p.list_price.amount,
+                            "image": p.image_url,
                             "discount": int(discount_percentage)
                         })
         return results
