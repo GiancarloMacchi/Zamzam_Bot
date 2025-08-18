@@ -4,6 +4,7 @@ import asyncio
 from telegram.error import TelegramError
 import json
 import random
+import html
 
 async def send_telegram_message(config, products_list, keyword):
     try:
@@ -23,13 +24,16 @@ async def send_telegram_message(config, products_list, keyword):
         for p in products_list:
             category_phrases = phrases_data.get("kids", []) if keyword in ["giocattoli", "bambini", "scuola", "piscina", "lego"] else phrases_data.get("default", [])
             random_phrase = random.choice(category_phrases) if category_phrases else "Un affare da non perdere!"
-
+            
+            # Sanitizza i titoli per prevenire problemi con il parsing HTML
+            safe_title = html.escape(p['title'])
+            
             message = ""
-            message += f"{random_phrase}\n\n"
-            message += f"**🤩 {p['title']}**\n"
-            message += f"💰 Prezzo: **{p['price']}€**\n"
-            message += f"🔥 Sconto: **{p['discount']}%**\n"
-            message += f"🔗 Link: **{p['url']}**\n\n"
+            message += f"<b>{random_phrase}</b>\n\n"
+            message += f"<b>🤩 {safe_title}</b>\n"
+            message += f"💰 Prezzo: <b>{p['price']}€</b>\n"
+            message += f"🔥 Sconto: <b>{p['discount']}%</b>\n"
+            message += f"🔗 Link: <b>{p['url']}</b>\n\n"
             
             try:
                 if p.get('image'):
@@ -37,20 +41,23 @@ async def send_telegram_message(config, products_list, keyword):
                         chat_id=config["TELEGRAM_CHAT_ID"],
                         photo=p['image'],
                         caption=message,
-                        parse_mode='Markdown'
+                        parse_mode='HTML',
+                        disable_notification=True  # Disattiva la notifica
                     )
                 else:
                     await bot.send_message(
                         chat_id=config["TELEGRAM_CHAT_ID"],
                         text=message,
-                        parse_mode='Markdown'
+                        parse_mode='HTML',
+                        disable_notification=True  # Disattiva la notifica
                     )
             except TelegramError as te:
                 logging.error(f"Errore di Telegram durante l'invio del post: {te}. Invio solo il testo.")
                 await bot.send_message(
                     chat_id=config["TELEGRAM_CHAT_ID"],
                     text=message,
-                    parse_mode='Markdown'
+                    parse_mode='HTML',
+                    disable_notification=True  # Disattiva la notifica
                 )
 
             await asyncio.sleep(300)
@@ -59,7 +66,8 @@ async def send_telegram_message(config, products_list, keyword):
         await bot.send_message(
             chat_id=config["TELEGRAM_CHAT_ID"],
             text=ending_text,
-            parse_mode='Markdown'
+            parse_mode='HTML',
+            disable_notification=True  # Disattiva la notifica
         )
         
         logging.info(f"Offerte inviate per la parola chiave: {keyword}")
