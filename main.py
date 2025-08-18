@@ -30,9 +30,11 @@ async def main():
         try:
             products = search_amazon(keyword, config)
             if products:
+                # La logica di invio è ora in telegram_bot.py
                 await send_telegram_message(config, products, keyword)
-                
-            time.sleep(10) # Pausa tra una ricerca e l'altra
+            
+            # Pausa tra le parole chiave per non stressare l'API
+            time.sleep(60) 
             
         except Exception as e:
             logging.error(f"Errore generale per la parola chiave {keyword}: {e}")
