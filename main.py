@@ -1,7 +1,7 @@
 import logging
 import time
 import os
-from amazon_api import search_amazon
+from amazon_api_V2.py import search_amazon
 from telegram_bot import send_telegram_message
 
 # Logging a livello DEBUG per avere tutti i dettagli
