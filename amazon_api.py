@@ -16,10 +16,13 @@ def search_amazon(keyword, config):
         
         products = amazon.search_items(keywords=keyword)
         
-        logging.info(f"Trovati {len(products)} prodotti per la keyword: {keyword}")
+        # Accesso corretto alla lista dei prodotti
+        items_list = products.items
+        
+        logging.info(f"Trovati {len(items_list)} prodotti per la keyword: {keyword}")
 
         products_list = []
-        for p in products:
+        for p in items_list: # Loop sulla lista corretta
             product = {
                 'title': p.title,
                 'url': p.url,
