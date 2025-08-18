@@ -1,13 +1,13 @@
 import logging
 import os
-from amazon_paapi import AmazonAPI
+from amazon_paapi import AmazonApi
 import time
 
 def search_amazon(keyword, config):
     try:
         logging.info(f"Cercando prodotti per: {keyword}")
 
-        amazon = AmazonAPI(
+        amazon = AmazonApi(
             access_key=config['AMAZON_ACCESS_KEY'],
             secret_key=config['AMAZON_SECRET_KEY'],
             associate_tag=config['AMAZON_ASSOCIATE_TAG'],
